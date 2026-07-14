@@ -53,9 +53,55 @@ OBJECTS_DIR   = ./
 ####### Files
 
 SOURCES       = ../Drone/main.cpp \
-		../Drone/mainwindow.cpp moc_mainwindow.cpp
+		../Drone/mainwindow.cpp \
+		../Drone/src/algorithm/CoordTransform.cpp \
+		../Drone/src/algorithm/DouglasPeucker.cpp \
+		../Drone/src/algorithm/GeoFence.cpp \
+		../Drone/src/algorithm/PathPlanner.cpp \
+		../Drone/src/core/CommandSender.cpp \
+		../Drone/src/core/DataDispatcher.cpp \
+		../Drone/src/core/DroneManager.cpp \
+		../Drone/src/core/TelemetryReceiver.cpp \
+		../Drone/src/database/DatabaseManager.cpp \
+		../Drone/src/database/DroneDAO.cpp \
+		../Drone/src/database/FlightLogDAO.cpp \
+		../Drone/src/database/GeoFenceDAO.cpp \
+		../Drone/src/protocol/MavlinkParser.cpp \
+		../Drone/src/protocol/SimulatedLink.cpp \
+		../Drone/src/ui/GeoFenceWidget.cpp \
+		../Drone/src/ui/HistoryReplayWidget.cpp \
+		../Drone/src/ui/MapWidget.cpp \
+		../Drone/src/ui/PathPlanningWidget.cpp \
+		../Drone/src/ui/PermissionWidget.cpp \
+		../Drone/src/ui/StatusBarWidget.cpp \
+		../Drone/src/utils/ExcelExporter.cpp \
+		../Drone/src/utils/KMLParser.cpp \
+		../Drone/src/utils/Logger.cpp moc_mainwindow.cpp
 OBJECTS       = main.o \
 		mainwindow.o \
+		CoordTransform.o \
+		DouglasPeucker.o \
+		GeoFence.o \
+		PathPlanner.o \
+		CommandSender.o \
+		DataDispatcher.o \
+		DroneManager.o \
+		TelemetryReceiver.o \
+		DatabaseManager.o \
+		DroneDAO.o \
+		FlightLogDAO.o \
+		GeoFenceDAO.o \
+		MavlinkParser.o \
+		SimulatedLink.o \
+		GeoFenceWidget.o \
+		HistoryReplayWidget.o \
+		MapWidget.o \
+		PathPlanningWidget.o \
+		PermissionWidget.o \
+		StatusBarWidget.o \
+		ExcelExporter.o \
+		KMLParser.o \
+		Logger.o \
 		moc_mainwindow.o
 DIST          = /usr/lib/x86_64-linux-gnu/qt5/mkspecs/features/spec_pre.prf \
 		/usr/lib/x86_64-linux-gnu/qt5/mkspecs/common/unix.conf \
@@ -134,8 +180,60 @@ DIST          = /usr/lib/x86_64-linux-gnu/qt5/mkspecs/features/spec_pre.prf \
 		/usr/lib/x86_64-linux-gnu/qt5/mkspecs/features/exceptions.prf \
 		/usr/lib/x86_64-linux-gnu/qt5/mkspecs/features/yacc.prf \
 		/usr/lib/x86_64-linux-gnu/qt5/mkspecs/features/lex.prf \
-		../Drone/Drone.pro ../Drone/mainwindow.h ../Drone/main.cpp \
-		../Drone/mainwindow.cpp
+		../Drone/Drone.pro ../Drone/mainwindow.h \
+		../Drone/src/algorithm/CoordTransform.h \
+		../Drone/src/algorithm/DouglasPeucker.h \
+		../Drone/src/algorithm/GeoFence.h \
+		../Drone/src/algorithm/PathPlanner.h \
+		../Drone/src/app/AppConfig.h \
+		../Drone/src/core/CommandSender.h \
+		../Drone/src/core/DataDispatcher.h \
+		../Drone/src/core/DroneManager.h \
+		../Drone/src/core/TelemetryReceiver.h \
+		../Drone/src/database/DatabaseManager.h \
+		../Drone/src/database/DroneDAO.h \
+		../Drone/src/database/FlightLogDAO.h \
+		../Drone/src/database/GeoFenceDAO.h \
+		../Drone/src/model/DroneInfo.h \
+		../Drone/src/model/FlightLog.h \
+		../Drone/src/model/FlightPath.h \
+		../Drone/src/model/GeoFenceZone.h \
+		../Drone/src/protocol/MavlinkMessage.h \
+		../Drone/src/protocol/MavlinkParser.h \
+		../Drone/src/protocol/SimulatedLink.h \
+		../Drone/src/ui/GeoFenceWidget.h \
+		../Drone/src/ui/HistoryReplayWidget.h \
+		../Drone/src/ui/MapWidget.h \
+		../Drone/src/ui/PathPlanningWidget.h \
+		../Drone/src/ui/PermissionWidget.h \
+		../Drone/src/ui/StatusBarWidget.h \
+		../Drone/src/utils/ExcelExporter.h \
+		../Drone/src/utils/KMLParser.h \
+		../Drone/src/utils/Logger.h ../Drone/main.cpp \
+		../Drone/mainwindow.cpp \
+		../Drone/src/algorithm/CoordTransform.cpp \
+		../Drone/src/algorithm/DouglasPeucker.cpp \
+		../Drone/src/algorithm/GeoFence.cpp \
+		../Drone/src/algorithm/PathPlanner.cpp \
+		../Drone/src/core/CommandSender.cpp \
+		../Drone/src/core/DataDispatcher.cpp \
+		../Drone/src/core/DroneManager.cpp \
+		../Drone/src/core/TelemetryReceiver.cpp \
+		../Drone/src/database/DatabaseManager.cpp \
+		../Drone/src/database/DroneDAO.cpp \
+		../Drone/src/database/FlightLogDAO.cpp \
+		../Drone/src/database/GeoFenceDAO.cpp \
+		../Drone/src/protocol/MavlinkParser.cpp \
+		../Drone/src/protocol/SimulatedLink.cpp \
+		../Drone/src/ui/GeoFenceWidget.cpp \
+		../Drone/src/ui/HistoryReplayWidget.cpp \
+		../Drone/src/ui/MapWidget.cpp \
+		../Drone/src/ui/PathPlanningWidget.cpp \
+		../Drone/src/ui/PermissionWidget.cpp \
+		../Drone/src/ui/StatusBarWidget.cpp \
+		../Drone/src/utils/ExcelExporter.cpp \
+		../Drone/src/utils/KMLParser.cpp \
+		../Drone/src/utils/Logger.cpp
 QMAKE_TARGET  = Drone
 DESTDIR       = 
 TARGET        = Drone
@@ -319,8 +417,8 @@ distdir: FORCE
 	@test -d $(DISTDIR) || mkdir -p $(DISTDIR)
 	$(COPY_FILE) --parents $(DIST) $(DISTDIR)/
 	$(COPY_FILE) --parents /usr/lib/x86_64-linux-gnu/qt5/mkspecs/features/data/dummy.cpp $(DISTDIR)/
-	$(COPY_FILE) --parents ../Drone/mainwindow.h $(DISTDIR)/
-	$(COPY_FILE) --parents ../Drone/main.cpp ../Drone/mainwindow.cpp $(DISTDIR)/
+	$(COPY_FILE) --parents ../Drone/mainwindow.h ../Drone/src/algorithm/CoordTransform.h ../Drone/src/algorithm/DouglasPeucker.h ../Drone/src/algorithm/GeoFence.h ../Drone/src/algorithm/PathPlanner.h ../Drone/src/app/AppConfig.h ../Drone/src/core/CommandSender.h ../Drone/src/core/DataDispatcher.h ../Drone/src/core/DroneManager.h ../Drone/src/core/TelemetryReceiver.h ../Drone/src/database/DatabaseManager.h ../Drone/src/database/DroneDAO.h ../Drone/src/database/FlightLogDAO.h ../Drone/src/database/GeoFenceDAO.h ../Drone/src/model/DroneInfo.h ../Drone/src/model/FlightLog.h ../Drone/src/model/FlightPath.h ../Drone/src/model/GeoFenceZone.h ../Drone/src/protocol/MavlinkMessage.h ../Drone/src/protocol/MavlinkParser.h ../Drone/src/protocol/SimulatedLink.h ../Drone/src/ui/GeoFenceWidget.h ../Drone/src/ui/HistoryReplayWidget.h ../Drone/src/ui/MapWidget.h ../Drone/src/ui/PathPlanningWidget.h ../Drone/src/ui/PermissionWidget.h ../Drone/src/ui/StatusBarWidget.h ../Drone/src/utils/ExcelExporter.h ../Drone/src/utils/KMLParser.h ../Drone/src/utils/Logger.h $(DISTDIR)/
+	$(COPY_FILE) --parents ../Drone/main.cpp ../Drone/mainwindow.cpp ../Drone/src/algorithm/CoordTransform.cpp ../Drone/src/algorithm/DouglasPeucker.cpp ../Drone/src/algorithm/GeoFence.cpp ../Drone/src/algorithm/PathPlanner.cpp ../Drone/src/core/CommandSender.cpp ../Drone/src/core/DataDispatcher.cpp ../Drone/src/core/DroneManager.cpp ../Drone/src/core/TelemetryReceiver.cpp ../Drone/src/database/DatabaseManager.cpp ../Drone/src/database/DroneDAO.cpp ../Drone/src/database/FlightLogDAO.cpp ../Drone/src/database/GeoFenceDAO.cpp ../Drone/src/protocol/MavlinkParser.cpp ../Drone/src/protocol/SimulatedLink.cpp ../Drone/src/ui/GeoFenceWidget.cpp ../Drone/src/ui/HistoryReplayWidget.cpp ../Drone/src/ui/MapWidget.cpp ../Drone/src/ui/PathPlanningWidget.cpp ../Drone/src/ui/PermissionWidget.cpp ../Drone/src/ui/StatusBarWidget.cpp ../Drone/src/utils/ExcelExporter.cpp ../Drone/src/utils/KMLParser.cpp ../Drone/src/utils/Logger.cpp $(DISTDIR)/
 	$(COPY_FILE) --parents ../Drone/mainwindow.ui $(DISTDIR)/
 
 
@@ -386,8 +484,77 @@ main.o: ../Drone/main.cpp ../Drone/mainwindow.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o main.o ../Drone/main.cpp
 
 mainwindow.o: ../Drone/mainwindow.cpp ../Drone/mainwindow.h \
-		ui_mainwindow.h
+		../Drone/ui_mainwindow.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o mainwindow.o ../Drone/mainwindow.cpp
+
+CoordTransform.o: ../Drone/src/algorithm/CoordTransform.cpp 
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o CoordTransform.o ../Drone/src/algorithm/CoordTransform.cpp
+
+DouglasPeucker.o: ../Drone/src/algorithm/DouglasPeucker.cpp 
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o DouglasPeucker.o ../Drone/src/algorithm/DouglasPeucker.cpp
+
+GeoFence.o: ../Drone/src/algorithm/GeoFence.cpp 
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o GeoFence.o ../Drone/src/algorithm/GeoFence.cpp
+
+PathPlanner.o: ../Drone/src/algorithm/PathPlanner.cpp 
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o PathPlanner.o ../Drone/src/algorithm/PathPlanner.cpp
+
+CommandSender.o: ../Drone/src/core/CommandSender.cpp 
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o CommandSender.o ../Drone/src/core/CommandSender.cpp
+
+DataDispatcher.o: ../Drone/src/core/DataDispatcher.cpp 
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o DataDispatcher.o ../Drone/src/core/DataDispatcher.cpp
+
+DroneManager.o: ../Drone/src/core/DroneManager.cpp 
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o DroneManager.o ../Drone/src/core/DroneManager.cpp
+
+TelemetryReceiver.o: ../Drone/src/core/TelemetryReceiver.cpp 
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o TelemetryReceiver.o ../Drone/src/core/TelemetryReceiver.cpp
+
+DatabaseManager.o: ../Drone/src/database/DatabaseManager.cpp 
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o DatabaseManager.o ../Drone/src/database/DatabaseManager.cpp
+
+DroneDAO.o: ../Drone/src/database/DroneDAO.cpp 
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o DroneDAO.o ../Drone/src/database/DroneDAO.cpp
+
+FlightLogDAO.o: ../Drone/src/database/FlightLogDAO.cpp 
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o FlightLogDAO.o ../Drone/src/database/FlightLogDAO.cpp
+
+GeoFenceDAO.o: ../Drone/src/database/GeoFenceDAO.cpp 
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o GeoFenceDAO.o ../Drone/src/database/GeoFenceDAO.cpp
+
+MavlinkParser.o: ../Drone/src/protocol/MavlinkParser.cpp 
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o MavlinkParser.o ../Drone/src/protocol/MavlinkParser.cpp
+
+SimulatedLink.o: ../Drone/src/protocol/SimulatedLink.cpp 
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o SimulatedLink.o ../Drone/src/protocol/SimulatedLink.cpp
+
+GeoFenceWidget.o: ../Drone/src/ui/GeoFenceWidget.cpp 
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o GeoFenceWidget.o ../Drone/src/ui/GeoFenceWidget.cpp
+
+HistoryReplayWidget.o: ../Drone/src/ui/HistoryReplayWidget.cpp 
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o HistoryReplayWidget.o ../Drone/src/ui/HistoryReplayWidget.cpp
+
+MapWidget.o: ../Drone/src/ui/MapWidget.cpp 
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o MapWidget.o ../Drone/src/ui/MapWidget.cpp
+
+PathPlanningWidget.o: ../Drone/src/ui/PathPlanningWidget.cpp 
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o PathPlanningWidget.o ../Drone/src/ui/PathPlanningWidget.cpp
+
+PermissionWidget.o: ../Drone/src/ui/PermissionWidget.cpp 
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o PermissionWidget.o ../Drone/src/ui/PermissionWidget.cpp
+
+StatusBarWidget.o: ../Drone/src/ui/StatusBarWidget.cpp 
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o StatusBarWidget.o ../Drone/src/ui/StatusBarWidget.cpp
+
+ExcelExporter.o: ../Drone/src/utils/ExcelExporter.cpp 
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o ExcelExporter.o ../Drone/src/utils/ExcelExporter.cpp
+
+KMLParser.o: ../Drone/src/utils/KMLParser.cpp 
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o KMLParser.o ../Drone/src/utils/KMLParser.cpp
+
+Logger.o: ../Drone/src/utils/Logger.cpp 
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o Logger.o ../Drone/src/utils/Logger.cpp
 
 moc_mainwindow.o: moc_mainwindow.cpp 
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o moc_mainwindow.o moc_mainwindow.cpp

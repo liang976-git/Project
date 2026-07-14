@@ -1,9 +1,11 @@
 # 无人机管控平台 — 20天开发任务清单
 
+> **当前进度**：Day 1 / 20 | **已完成**：4/90 任务 | **阶段一进行中**
+
 > **项目目标**：20天内完成管控平台功能完整可演示版本  
 > **技术栈**：C++ / Qt 5.12 / ZeroMQ / SQLite / 高德地图 / MAVLink(模拟数据)  
 > **开发环境**：Qt Creator + Qt 5.12.8  
-> **代码目录**：~/Desktop/code/QT/Project/Drone/  
+> **代码目录**：~/Desktop/code/Project/Drone/Drone/  
 > **文档版本**：V1.0  
 > **创建日期**：2026-07-13
 
@@ -29,10 +31,10 @@
 
 | 序号 | 任务 | 具体步骤 | 预计耗时 | 验收标准 |
 |------|------|----------|----------|----------|
-| 1.1 | 验证 Qt Creator 环境 | 新建 Qt Widgets Application → 编译运行 → 确认无报错 | 30min | 窗口正常弹出，Debug/Release 均可编译 |
-| 1.2 | 验证 SQLite 可用 | 代码中创建 SQLite 连接，执行 CREATE TABLE / INSERT / SELECT | 30min | 数据库文件生成，查询返回正确结果 |
-| 1.3 | 验证 ZeroMQ 可用 | 编写最小 PUB-SUB 示例，本机测试收发消息 | 1h | 两个程序能互相收发字符串 |
-| 1.4 | 创建项目目录结构 | 按下方架构创建文件夹和空文件 | 1h | 目录结构完整，各文件能编译通过 |
+| 1.1 | ✅ 验证 Qt Creator 环境 | 新建 Qt Widgets Application → 编译运行 → 确认无报错 | 30min | 窗口正常弹出，Debug/Release 均可编译 |
+| 1.2 | ✅ 验证 SQLite 可用 | 代码中创建 SQLite 连接，执行 CREATE TABLE / INSERT / SELECT | 30min | 数据库文件生成，查询返回正确结果 |
+| 1.3 | ✅ 验证 ZeroMQ 可用 | 编写最小 PUB-SUB 示例，本机测试收发消息 | 1h | 两个程序能互相收发字符串 |
+| 1.4 | ✅ 创建项目目录结构 | 按下方架构创建文件夹和空文件 | 1h | 目录结构完整，各文件能编译通过 |
 
 **项目目录结构**：
 ```
@@ -414,9 +416,9 @@ Drone/
 
 ## 外部依赖准备清单（Day 1 前完成）
 
-- [ ] 高德地图开放平台注册 + JS API Key 申请
-- [ ] 确认 Qt Creator 可正常编译 Qt Widgets 项目
-- [ ] 确认 ZeroMQ 库已安装（apt install libzmq3-dev）
+- [x] 高德地图开放平台注册 + JS API Key 申请
+- [x] 确认 Qt Creator 可正常编译 Qt Widgets 项目
+- [x] 确认 ZeroMQ 库已安装（apt install libzmq3-dev）
 - [ ] 下载 QCustomPlot 源码（qcustomplot.h 一个头文件即可）
 - [ ] 下载 QXlsx 源码（Excel 导出用）
 - [ ] 准备图标素材（推荐 iconfont.cn 下载）
