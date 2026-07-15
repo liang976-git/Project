@@ -58,6 +58,7 @@ HEADERS += \
     src/database/DroneDAO.h \
     src/database/FlightLogDAO.h \
     src/database/GeoFenceDAO.h \
+    src/model/AlarmInfo.h \
     src/model/DroneInfo.h \
     src/model/FlightLog.h \
     src/model/FlightPath.h \
