@@ -195,6 +195,50 @@ connect(sender, &Sender::signal, receiver, &Receiver::slot);
 
 ---
 
+## Day 3 — 模拟数据层 + MAVLink协议
+
+### 问题 1：MavlinkParser.h 头文件保护写错
+- **原因**：第一行写成了 `#include MAVLINKPARSER_H`，应为 `#ifndef MAVLINKPARSER_H`
+- **解决**：改为正确的头文件保护语法
+- **知识点**：C++ 头文件保护的两种写法（`#ifndef` vs `#pragma once`）
+- **面试相关**：⚠️ `#ifndef` 和 `#pragma once` 的区别
+
+**⚠️ 面试题：`#ifndef` vs `#pragma once`？**
+
+| 对比 | `#ifndef` | `#pragma once` |
+|------|-----------|----------------|
+| 标准 | C/C++ 标准 | 编译器扩展（非标准） |
+| 可移植性 | ✅ 所有编译器支持 | 大部分支持，极少数不支持 |
+| 写法 | 需定义宏名，较冗长 | 一行搞定，简洁 |
+| 精确度 | 按文件名匹配 | 按物理文件路径匹配 |
+| 实际使用 | 老项目、跨平台项目 | 现代C++项目主流 |
+
+### 问题 2：SimulatedLink.h 方法名拼写错误
+- **原因**：头文件声明 `stopSimulaton`（少了一个 `i`），但 .cpp 实现是 `stopSimulation`
+- **解决**：统一为 `stopSimulation`
+- **知识点**：声明和定义的函数签名必须完全一致，包括拼写
+- **面试相关**：⚠️ C++ 链接（Linking）— 编译器如何匹配声明和定义
+
+### 问题 3：reinterpret_cast 语法错误
+- **原因**：写成 `reinterpret_cast<const char*(&yaw)`，`*` 和 `>` 位置错误
+- **正确写法**：`reinterpret_cast<const char*>(&yaw)`
+- **知识点**：`reinterpret_cast` 用于指针/引用的底层二进制类型转换
+- **面试相关**：⚠️ C++ 四种 cast 的区别
+
+**⚠️ 面试题：C++ 四种类型转换？**
+
+| 类型 | 用途 | 安全性 |
+|------|------|--------|
+| `static_cast` | 编译期类型转换（int↔float、继承关系） | ✅ 安全，编译器检查 |
+| `dynamic_cast` | 运行时多态类型转换（基类↔派生类） | ✅ 安全，失败返回nullptr |
+| `const_cast` | 去除/添加 const 修饰 | ⚠️ 危险，改了就改了 |
+| `reinterpret_cast` | 底层二进制重新解释（指针↔整数、指针↔指针） | ❌ 最危险，依赖平台 |
+
+**本项目为什么用 `reinterpret_cast`？**
+→ 需要把 `int32_t`/`uint16_t` 等数值的二进制直接写入 `QByteArray`，不做任何数值转换，这是 `reinterpret_cast` 的典型用途。
+
+---
+
 ## 待记录
 
 _后续开发中遇到的问题在此追加_
