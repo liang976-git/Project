@@ -239,6 +239,158 @@ connect(sender, &Sender::signal, receiver, &Receiver::slot);
 
 ---
 
+### 知识点 1：QTimer 工作原理（面试常问）
+
+**⚠️ 面试题：QTimer 是怎么实现定时的？底层用的什么？**
+
+**原理**：
+```
+QTimer::start(100)
+    ↓
+Qt 事件循环注册一个定时器（底层用 epoll/kqueue/timerfd）
+    ↓
+每隔 100ms，内核向事件队列插入一条 QTimerEvent
+    ↓
+QCoreApplication::notify() 分发给对应的 QTimer 对象
+    ↓
+触发 timeout() 信号
+```
+
+**底层实现（Linux）**：
+- Qt 5 用 `timerfd_create()` 创建文件描述符
+- 用 `epoll` 监听该 fd
+- 定时到期时 epoll 返回，Qt 事件循环处理
+
+**面试追问**：
+- **QTimer 精确吗？** → 不精确。受事件循环阻塞影响，如果有耗时操作卡住事件循环，定时器会延迟
+- **QTimer 可以跨线程吗？** → 可以，但必须在目标线程的事件循环中创建，或用 `moveToThread()`
+- **QTimer::singleShot 用过吗？** → 一次性定时器，延迟执行某个槽函数，等效于 `std::this_thread::sleep_for` 但不阻塞线程
+
+---
+
+### 知识点 2：二进制协议 vs JSON 序列化（面试必问）
+
+**⚠️ 面试题：项目中为什么用二进制序列化而不是 JSON？**
+
+**本项目的两种序列化方式**：
+
+| 方式 | 用途 | 格式 |
+|------|------|------|
+| MavlinkParser | 编解码 MAVLink 消息 | 二进制字节流 |
+| DataDispatcher | 发布遥测数据 | 二进制字节流 |
+
+**二进制协议 vs JSON 对比**：
+
+| 维度 | 二进制协议 | JSON |
+|------|-----------|------|
+| 体积 | 小（一个int占4字节） | 大（一个int占~10字节） |
+| 速度 | 快（直接内存拷贝） | 慢（需要解析字符串） |
+| 可读性 | ❌ 不可读 | ✅ 人类可读 |
+| 跨语言 | 需约定字节序/对齐 | ✅ 所有语言都有JSON库 |
+| 调试 | 困难，需要抓包工具 | 容易，直接看文本 |
+| 适用场景 | 高频实时数据（遥测、游戏） | 配置文件、Web API |
+
+**本项目为什么选二进制？**
+→ 遥测数据每 100ms 发一次，5 架无人机 = 每秒 50 次。JSON 解析开销大，二进制直接 `memcpy` 最快。
+
+**面试追问**：
+- **字节序问题怎么处理？** → MAVLink 标准用小端序（Little-Endian），x86/ARM 都是小端，本项目直接用 `reinterpret_cast` 写入，不需要转换
+- **怎么设计一个二进制协议？** → 固定帧头(0xFD) + 长度 + 序列号 + 消息体 + 校验和，类似本项目的 `buildFrame()`
+
+---
+
+### 知识点 3：ZeroMQ PUB-SUB 深入（面试高频）
+
+**⚠️ 面试题：ZeroMQ 的 PUB-SUB 模式有什么特点？有什么缺点？**
+
+**工作原理**：
+```
+Publisher                    Subscriber
+    │                            │
+    ├── bind("tcp://*:5555")     ├── connect("tcp://ip:5555")
+    │                            │
+    ├── zmq_send(data) ──────────┤── poll/recv 接收
+    │                            │
+    └── 一对多：多个sub可连接 ────┘
+```
+
+**特点**：
+- **松耦合**：发布者不知道订阅者是谁
+- **一对多**：一个 PUB 可以被多个 SUB 订阅
+- **消息过滤**：SUB 可以通过 topic 过滤消息
+- **非阻塞**：PUB 发送不等待 SUB 接收
+
+**缺点（重要！）**：
+- **消息丢失**：如果 SUB 断开，PUB 发送的消息直接丢弃（无持久化）
+- **慢订阅者问题**：如果 SUB 处理太慢，消息会在 ZMQ 内部队列堆积，最终丢弃
+- **无确认机制**：PUB 不知道 SUB 是否收到
+
+**面试追问**：
+- **怎么解决消息丢失？** → 用 REQ-REP 模式加确认，或用 ZeroMQ 的 `ZMQ_ROUTER`/`ZMQ_DEALER`
+- **PUB-SUB 和消息队列（Kafka/RabbitMQ）的区别？** → ZeroMQ 是库（进程内），Kafka 是服务（独立部署），ZeroMQ 无持久化，Kafka 有
+
+---
+
+### 知识点 4：zmq_poll 非阻塞轮询
+
+**⚠️ 面试题：如何在不阻塞 UI 的情况下接收 ZeroMQ 消息？**
+
+**方案对比**：
+
+| 方案 | 做法 | 问题 |
+|------|------|------|
+| 直接 zmq_recv | 阻塞等待 | ❌ 卡死 UI 线程 |
+| 新建线程 + zmq_recv | 子线程阻塞接收 | ⚠️ 需要线程同步 |
+| QTimer + zmq_poll | 定时轮询 | ✅ 本项目采用 |
+
+**本项目代码**：
+```cpp
+zmq_pollitem_t items[] = { { m_subscriber, 0, ZMQ_POLLIN, 0 } };
+int rc = zmq_poll(items, 1, 0);  // timeout=0 即非阻塞
+if (rc > 0 && (items[0].revents & ZMQ_POLLIN)) {
+    zmq_recv(m_subscriber, buffer, sizeof(buffer)-1, ZMQ_DONTWAIT);
+}
+```
+
+**`zmq_poll` 参数说明**：
+- `items[]`：要监听的 socket 数组
+- `1`：监听数量
+- `0`：超时时间（毫秒），0 = 不等待
+- `ZMQ_POLLIN`：可读事件
+- `revents`：实际触发的事件
+
+---
+
+### 知识点 5：C++ 内存对齐与字节序
+
+**⚠️ 面试题：网络通信中字节序怎么处理？**
+
+**字节序（Byte Order）**：
+```
+大端序（Big-Endian）：高字节在低地址 → 网络传输标准（TCP/IP）
+小端序（Little-Endian）：低字节在低地址 → x86/ARM 默认
+
+int32_t value = 0x12345678;
+内存：0x78 0x56 0x34 0x12  ← 小端序（本项目直接这样写入）
+```
+
+**本项目为什么没处理字节序？**
+→ MAVLink 协议规定用小端序，而 Qt 开发环境（x86/ARM）本身就是小端，`reinterpret_cast` 直接写入内存就是正确的。
+
+**如果跨平台（大小端混合）怎么办？**
+```cpp
+// 网络字节序转换函数
+uint32_t htonl(uint32_t hostlong);  // host to network long
+uint16_t htons(uint16_t hostshort); // host to network short
+uint32_t ntohl(uint32_t netlong);   // network to host long
+```
+
+**面试追问**：
+- **什么是内存对齐？** → 编译器为了让 CPU 高效访问内存，会在结构体成员间插入填充字节
+- **`#pragma pack(1)` 的作用？** → 取消对齐，结构体紧凑排列，网络协议常用
+
+---
+
 ## 待记录
 
 _后续开发中遇到的问题在此追加_
