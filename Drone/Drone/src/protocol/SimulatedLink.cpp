@@ -3,7 +3,7 @@
 #include <QDateTime>
 
 SimulatedLink::SimulatedLink(QObject *parent):QObject(parent),m_timer(new QTimer(this)),m_tick(0){
-    connect(m_timer,&QTimer::timeout,this,generateTelemetry);
+    connect(m_timer,&QTimer::timeout,this,&SimulatedLink::generateTelemetry);
 
 }
 void SimulatedLink::startSimulation(int droneCount){

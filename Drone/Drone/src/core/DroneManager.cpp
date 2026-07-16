@@ -7,31 +7,26 @@ DroneManager::DroneManager(QObject *parent)
 
 void DroneManager::registerDrone(const DroneInfo &info)
 {
-    m_drones.insert(info.id, info);
+    m_drone.insert(info.id, info);
     emit droneAdded(info.id);
 }
 
 void DroneManager::unregisterDrone(int droneId)
 {
-    if (m_drones.remove(droneId) > 0) {
+    if (m_drone.remove(droneId) > 0) {
         emit droneRemoved(droneId);
     }
 }
 
-DroneInfo DroneManager::getDrone(int droneId) const
-{
-    return m_drones.value(droneId);
-}
-
 QList<DroneInfo> DroneManager::getAllDrones() const
 {
-    return m_drones.values();
+    return m_drone.values();
 }
 
 QList<DroneInfo> DroneManager::getDronesByStatus(DroneStatus status) const
 {
     QList<DroneInfo> result;
-    for (const DroneInfo &drone : m_drones) {
+    for (const DroneInfo &drone : m_drone) {
         if (drone.status == status) {
             result.append(drone);
         }
@@ -41,12 +36,14 @@ QList<DroneInfo> DroneManager::getDronesByStatus(DroneStatus status) const
 
 void DroneManager::updateDroneStatus(int droneId, const DroneInfo &info)
 {
-    if (!m_drones.contains(droneId)) {
+    if (!m_drone.contains(droneId)) {
+        m_drone.insert(droneId, info);
+        emit droneAdded(droneId);
         return;
     }
 
-    DroneStatus oldStatus = m_drones[droneId].status;
-    m_drones[droneId] = info;
+    DroneStatus oldStatus = m_drone[droneId].status;
+    m_drone[droneId] = info;
 
     if (oldStatus != info.status) {
         emit droneStatusChanged(droneId, info.status);
@@ -63,5 +60,5 @@ void DroneManager::updateDroneStatus(int droneId, const DroneInfo &info)
 
 int DroneManager::droneCount() const
 {
-    return m_drones.size();
+    return m_drone.size();
 }

@@ -1,6 +1,6 @@
 # 无人机管控平台 — 20天开发任务清单
 
-> **当前进度**：Day 3 / 20 | **已完成**：12/90 任务 | **阶段一进行中**
+> **当前进度**：Day 3 / 20 | **已完成**：14/90 任务 | **阶段一进行中**
 
 > **项目目标**：20天内完成管控平台功能完整可演示版本  
 > **技术栈**：C++ / Qt 5.12 / ZeroMQ / SQLite / 高德地图 / MAVLink(模拟数据)  
@@ -119,8 +119,8 @@ Drone/
 |------|------|----------|----------|----------|
 | 3.1 | ✅ SimulatedLink 模拟链路 | 模拟 3-5 架无人机，定时(100ms)生成随机但合理的遥测数据(位置缓慢漂移、电量缓慢下降、速度波动) | 1.5h | 5 架无人机数据持续生成，数值合理 |
 | 3.2 | ✅ MavlinkParser 消息封装 | 封装 HEARTBEAT / GLOBAL_POSITION_INT / VFR_HUD / SYS_STATUS 四种核心消息的编码/解码(不依赖真实 MAVLink 库，自定义简化版) | 2h | 能序列化为字节数组，能反序列化还原 |
-| 3.3 | DataDispatcher ZeroMQ 分发 | PUB 模式发布遥测数据，SUB 模式接收控制指令 | 1h | 模拟数据 → ZeroMQ → 接收端正确解析 |
-| 3.4 | 数据流联调 | SimulatedLink → MavlinkParser → DataDispatcher → DroneManager 全链路跑通 | 1h | 控制台打印：每秒收到 5 架无人机的遥测数据 |
+| 3.3 | ✅ DataDispatcher ZeroMQ 分发 | PUB 模式发布遥测数据，SUB 模式接收控制指令 | 1h | 模拟数据 → ZeroMQ → 接收端正确解析 |
+| 3.4 | ✅ 数据流联调 | SimulatedLink → MavlinkParser → DataDispatcher → DroneManager 全链路跑通 | 1h | 控制台打印：每秒收到 5 架无人机的遥测数据 |
 
 ---
 

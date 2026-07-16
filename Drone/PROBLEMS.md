@@ -391,6 +391,137 @@ uint32_t ntohl(uint32_t netlong);   // network to host long
 
 ---
 
+## Day 3 — 联调与编译问题
+
+### 问题 1：头文件与实现文件变量名不一致
+- **现象**：`error: 'm_drones' was not declared in this scope; did you mean 'm_drone'?`
+- **原因**：`DroneManager.h` 中成员变量名为 `m_drone`，但 `.cpp` 中用的是 `m_drones`
+- **解决**：统一变量名
+
+**⚠️ 面试题：C++ 编译链接过程？头文件在哪个阶段被处理？**
+
+```
+源码(.cpp) → 预处理(#include展开) → 编译(生成.o) → 链接(合并所有.o → 可执行文件)
+```
+
+| 阶段 | 工具 | 做了什么 |
+|------|------|----------|
+| 预处理 | `g++ -E` | 展开 `#include`、宏替换、删除注释 |
+| 编译 | `g++ -S` | 生成汇编代码 |
+| 汇编 | `g++ -c` | 生成目标文件 `.o`（机器码） |
+| 链接 | `ld` | 合并所有 `.o` + 库文件 → 可执行文件 |
+
+**头文件的作用**：
+- `#include` 是**文本复制粘贴**，预处理阶段直接展开
+- 头文件只包含**声明**（函数声明、类定义、extern变量）
+- `.cpp` 包含**定义**（函数体、变量内存分配）
+- 链接器负责把 `.cpp` 中的定义和 `.h` 中的声明匹配
+
+**面试追问**：
+- **为什么头文件只放声明不放定义？** → 如果多个 `.cpp` 都 `#include` 同一个头文件，定义会被复制多份，链接时报重复定义错误
+- **`inline` 函数为什么可以放头文件？** → `inline` 告诉编译器允许重复定义，链接时选一份即可
+
+---
+
+### 问题 2：connect 语法错误
+- **现象**：`error: invalid use of non-static member function 'void SimulatedLink::generateTelemetry()'`
+- **原因**：`connect` 第4个参数漏了 `&` 和类名前缀
+- **错误**：`connect(m_timer, &QTimer::timeout, this, generateTelemetry);`
+- **正确**：`connect(m_timer, &QTimer::timeout, this, &SimulatedLink::generateTelemetry);`
+
+**⚠️ 面试题：Qt connect 旧语法 vs 新语法？**
+
+| 特性 | 旧语法（字符串） | 新语法（函数指针） |
+|------|----------------|-------------------|
+| 写法 | `connect(sender, SIGNAL(sig()), receiver, SLOT(slot()))` | `connect(sender, &Sender::sig, receiver, &Receiver::slot)` |
+| 检查时机 | 运行时 | **编译期** |
+| 错误发现 | 运行时报 warning | 编译直接报错 |
+| IDE 支持 | 无法跳转 | ✅ 可跳转、可重构 |
+| 性能 | 略慢（字符串查找） | 略快（直接函数指针） |
+
+**推荐使用新语法**，编译期就能发现错误。
+
+**面试追问**：
+- **`SLOT` 和 `SIGNAL` 宏做了什么？** → 把函数名转成字符串（如 `"clicked()"`），运行时通过 MOC 生成的元信息查找匹配
+- **Lambda 能做槽函数吗？** → 可以，`connect(sender, &Sender::sig, [=](){ ... });`，但要注意生命周期（sender 和 receiver 都销毁后不能再调用）
+
+---
+
+### 问题 3：const 方法中调用 emit 报错
+- **现象**：`error: passing 'const DroneManager' as 'this' argument discards qualifiers`
+- **原因**：`unregisterDrone` 声明为 `const`，但 `emit droneRemoved()` 需要修改内部状态
+- **解决**：去掉 `const` 修饰符
+
+**⚠️ 面试题：const 成员函数的限制？**
+
+```cpp
+class Foo {
+    int value;
+public:
+    void set(int v) { value = v; }        // 非const，可以修改成员
+    int get() const { return value; }      // const，不能修改成员
+};
+
+// const 对象只能调用 const 方法
+const Foo f;
+f.set(10);    // ❌ 编译错误
+f.get();      // ✅
+```
+
+**const 方法的限制**：
+- 不能修改任何非 `mutable` 成员变量
+- 不能调用非 `const` 方法
+- 不能 `emit` 信号（信号本质是函数调用，可能触发非const槽）
+
+**`mutable` 关键字**：允许在 `const` 方法中修改特定成员
+```cpp
+mutable int cacheCount;  // const 方法也能改
+```
+
+---
+
+### 问题 4：缺少头文件导致编译错误
+- **现象**：`error: incomplete type 'QThread' used in nested name specifier`
+- **原因**：`DataDispatcher.cpp` 用了 `QThread::msleep()` 但没 `#include <QThread>`
+- **解决**：添加 `#include <QThread>`
+
+**⚠️ 面试题：为什么有些函数不 include 也能编译通过？**
+
+- **隐式包含**：某些 Qt 头文件会间接 include 其他头文件（如 `<QWidget>` 会包含 `<QObject>`）
+- **前向声明**：如果只用了指针/引用，可以不 include 完整头文件（`class QThread;`）
+- **但不推荐**：依赖隐式包含会导致修改一个头文件后大面积编译失败
+
+**最佳实践**：
+> 每个 `.cpp` 文件应该 include 它**直接使用**的所有头文件，不依赖隐式包含。
+
+---
+
+### 知识点 5：多文件项目编译组织
+
+**⚠️ 面试题：一个有 50 个 .cpp 文件的项目，怎么组织编译？**
+
+**Makefile/qmake 的作用**：
+1. 只编译**修改过的** `.cpp` 文件（增量编译）
+2. 头文件变化时，重新编译所有 `#include` 它的 `.cpp`
+3. 最后链接所有 `.o` 成可执行文件
+
+**编译时间优化**：
+| 技术 | 原理 |
+|------|------|
+| 增量编译 | 只编译改动的文件，不重新编译全部 |
+| 预编译头（PCH） | 把不常改的头文件（Qt、STL）预编译成 `.gch` |
+| 并行编译 | `make -j8`，8个文件同时编译 |
+| 前向声明 | 减少头文件依赖，减少重编译范围 |
+
+**本项目的编译结构**：
+```
+Drone.pro → qmake → Makefile
+Makefile 管理 24 个 .cpp 的编译顺序和依赖关系
+最终链接：所有 .o + libQt5Widgets + libQt5Sql + libzmq → Drone 可执行文件
+```
+
+---
+
 ## 待记录
 
 _后续开发中遇到的问题在此追加_

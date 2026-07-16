@@ -76,7 +76,11 @@ SOURCES       = ../Drone/main.cpp \
 		../Drone/src/ui/StatusBarWidget.cpp \
 		../Drone/src/utils/ExcelExporter.cpp \
 		../Drone/src/utils/KMLParser.cpp \
-		../Drone/src/utils/Logger.cpp moc_mainwindow.cpp
+		../Drone/src/utils/Logger.cpp moc_mainwindow.cpp \
+		moc_DataDispatcher.cpp \
+		moc_DroneManager.cpp \
+		moc_MavlinkParser.cpp \
+		moc_SimulatedLink.cpp
 OBJECTS       = main.o \
 		mainwindow.o \
 		CoordTransform.o \
@@ -102,7 +106,11 @@ OBJECTS       = main.o \
 		ExcelExporter.o \
 		KMLParser.o \
 		Logger.o \
-		moc_mainwindow.o
+		moc_mainwindow.o \
+		moc_DataDispatcher.o \
+		moc_DroneManager.o \
+		moc_MavlinkParser.o \
+		moc_SimulatedLink.o
 DIST          = /usr/lib/x86_64-linux-gnu/qt5/mkspecs/features/spec_pre.prf \
 		/usr/lib/x86_64-linux-gnu/qt5/mkspecs/common/unix.conf \
 		/usr/lib/x86_64-linux-gnu/qt5/mkspecs/common/linux.conf \
@@ -194,6 +202,7 @@ DIST          = /usr/lib/x86_64-linux-gnu/qt5/mkspecs/features/spec_pre.prf \
 		../Drone/src/database/DroneDAO.h \
 		../Drone/src/database/FlightLogDAO.h \
 		../Drone/src/database/GeoFenceDAO.h \
+		../Drone/src/model/AlarmInfo.h \
 		../Drone/src/model/DroneInfo.h \
 		../Drone/src/model/FlightLog.h \
 		../Drone/src/model/FlightPath.h \
@@ -417,7 +426,7 @@ distdir: FORCE
 	@test -d $(DISTDIR) || mkdir -p $(DISTDIR)
 	$(COPY_FILE) --parents $(DIST) $(DISTDIR)/
 	$(COPY_FILE) --parents /usr/lib/x86_64-linux-gnu/qt5/mkspecs/features/data/dummy.cpp $(DISTDIR)/
-	$(COPY_FILE) --parents ../Drone/mainwindow.h ../Drone/src/algorithm/CoordTransform.h ../Drone/src/algorithm/DouglasPeucker.h ../Drone/src/algorithm/GeoFence.h ../Drone/src/algorithm/PathPlanner.h ../Drone/src/app/AppConfig.h ../Drone/src/core/CommandSender.h ../Drone/src/core/DataDispatcher.h ../Drone/src/core/DroneManager.h ../Drone/src/core/TelemetryReceiver.h ../Drone/src/database/DatabaseManager.h ../Drone/src/database/DroneDAO.h ../Drone/src/database/FlightLogDAO.h ../Drone/src/database/GeoFenceDAO.h ../Drone/src/model/DroneInfo.h ../Drone/src/model/FlightLog.h ../Drone/src/model/FlightPath.h ../Drone/src/model/GeoFenceZone.h ../Drone/src/protocol/MavlinkMessage.h ../Drone/src/protocol/MavlinkParser.h ../Drone/src/protocol/SimulatedLink.h ../Drone/src/ui/GeoFenceWidget.h ../Drone/src/ui/HistoryReplayWidget.h ../Drone/src/ui/MapWidget.h ../Drone/src/ui/PathPlanningWidget.h ../Drone/src/ui/PermissionWidget.h ../Drone/src/ui/StatusBarWidget.h ../Drone/src/utils/ExcelExporter.h ../Drone/src/utils/KMLParser.h ../Drone/src/utils/Logger.h $(DISTDIR)/
+	$(COPY_FILE) --parents ../Drone/mainwindow.h ../Drone/src/algorithm/CoordTransform.h ../Drone/src/algorithm/DouglasPeucker.h ../Drone/src/algorithm/GeoFence.h ../Drone/src/algorithm/PathPlanner.h ../Drone/src/app/AppConfig.h ../Drone/src/core/CommandSender.h ../Drone/src/core/DataDispatcher.h ../Drone/src/core/DroneManager.h ../Drone/src/core/TelemetryReceiver.h ../Drone/src/database/DatabaseManager.h ../Drone/src/database/DroneDAO.h ../Drone/src/database/FlightLogDAO.h ../Drone/src/database/GeoFenceDAO.h ../Drone/src/model/AlarmInfo.h ../Drone/src/model/DroneInfo.h ../Drone/src/model/FlightLog.h ../Drone/src/model/FlightPath.h ../Drone/src/model/GeoFenceZone.h ../Drone/src/protocol/MavlinkMessage.h ../Drone/src/protocol/MavlinkParser.h ../Drone/src/protocol/SimulatedLink.h ../Drone/src/ui/GeoFenceWidget.h ../Drone/src/ui/HistoryReplayWidget.h ../Drone/src/ui/MapWidget.h ../Drone/src/ui/PathPlanningWidget.h ../Drone/src/ui/PermissionWidget.h ../Drone/src/ui/StatusBarWidget.h ../Drone/src/utils/ExcelExporter.h ../Drone/src/utils/KMLParser.h ../Drone/src/utils/Logger.h $(DISTDIR)/
 	$(COPY_FILE) --parents ../Drone/main.cpp ../Drone/mainwindow.cpp ../Drone/src/algorithm/CoordTransform.cpp ../Drone/src/algorithm/DouglasPeucker.cpp ../Drone/src/algorithm/GeoFence.cpp ../Drone/src/algorithm/PathPlanner.cpp ../Drone/src/core/CommandSender.cpp ../Drone/src/core/DataDispatcher.cpp ../Drone/src/core/DroneManager.cpp ../Drone/src/core/TelemetryReceiver.cpp ../Drone/src/database/DatabaseManager.cpp ../Drone/src/database/DroneDAO.cpp ../Drone/src/database/FlightLogDAO.cpp ../Drone/src/database/GeoFenceDAO.cpp ../Drone/src/protocol/MavlinkParser.cpp ../Drone/src/protocol/SimulatedLink.cpp ../Drone/src/ui/GeoFenceWidget.cpp ../Drone/src/ui/HistoryReplayWidget.cpp ../Drone/src/ui/MapWidget.cpp ../Drone/src/ui/PathPlanningWidget.cpp ../Drone/src/ui/PermissionWidget.cpp ../Drone/src/ui/StatusBarWidget.cpp ../Drone/src/utils/ExcelExporter.cpp ../Drone/src/utils/KMLParser.cpp ../Drone/src/utils/Logger.cpp $(DISTDIR)/
 	$(COPY_FILE) --parents ../Drone/mainwindow.ui $(DISTDIR)/
 
@@ -451,13 +460,44 @@ compiler_moc_predefs_clean:
 moc_predefs.h: /usr/lib/x86_64-linux-gnu/qt5/mkspecs/features/data/dummy.cpp
 	g++ -pipe -g -std=gnu++11 -Wall -W -dM -E -o moc_predefs.h /usr/lib/x86_64-linux-gnu/qt5/mkspecs/features/data/dummy.cpp
 
-compiler_moc_header_make_all: moc_mainwindow.cpp
+compiler_moc_header_make_all: moc_mainwindow.cpp moc_DataDispatcher.cpp moc_DroneManager.cpp moc_MavlinkParser.cpp moc_SimulatedLink.cpp
 compiler_moc_header_clean:
-	-$(DEL_FILE) moc_mainwindow.cpp
+	-$(DEL_FILE) moc_mainwindow.cpp moc_DataDispatcher.cpp moc_DroneManager.cpp moc_MavlinkParser.cpp moc_SimulatedLink.cpp
 moc_mainwindow.cpp: ../Drone/mainwindow.h \
+		../Drone/src/core/DataDispatcher.h \
+		../Drone/src/model/DroneInfo.h \
+		../Drone/src/core/DroneManager.h \
+		../Drone/src/protocol/SimulatedLink.h \
+		../Drone/src/protocol/MavlinkParser.h \
+		../Drone/src/protocol/MavlinkMessage.h \
 		moc_predefs.h \
 		/usr/lib/qt5/bin/moc
 	/usr/lib/qt5/bin/moc $(DEFINES) --include /home/xuedaon/桌面/code/Project/Drone/build-Drone-unknown-Debug/moc_predefs.h -I/usr/lib/x86_64-linux-gnu/qt5/mkspecs/linux-g++ -I/home/xuedaon/桌面/code/Project/Drone/Drone -I/usr/include/x86_64-linux-gnu/qt5 -I/usr/include/x86_64-linux-gnu/qt5/QtWidgets -I/usr/include/x86_64-linux-gnu/qt5/QtGui -I/usr/include/x86_64-linux-gnu/qt5/QtSql -I/usr/include/x86_64-linux-gnu/qt5/QtCore -I. -I/usr/include/c++/9 -I/usr/include/x86_64-linux-gnu/c++/9 -I/usr/include/c++/9/backward -I/usr/lib/gcc/x86_64-linux-gnu/9/include -I/usr/local/include -I/usr/include/x86_64-linux-gnu -I/usr/include ../Drone/mainwindow.h -o moc_mainwindow.cpp
+
+moc_DataDispatcher.cpp: ../Drone/src/core/DataDispatcher.h \
+		../Drone/src/model/DroneInfo.h \
+		moc_predefs.h \
+		/usr/lib/qt5/bin/moc
+	/usr/lib/qt5/bin/moc $(DEFINES) --include /home/xuedaon/桌面/code/Project/Drone/build-Drone-unknown-Debug/moc_predefs.h -I/usr/lib/x86_64-linux-gnu/qt5/mkspecs/linux-g++ -I/home/xuedaon/桌面/code/Project/Drone/Drone -I/usr/include/x86_64-linux-gnu/qt5 -I/usr/include/x86_64-linux-gnu/qt5/QtWidgets -I/usr/include/x86_64-linux-gnu/qt5/QtGui -I/usr/include/x86_64-linux-gnu/qt5/QtSql -I/usr/include/x86_64-linux-gnu/qt5/QtCore -I. -I/usr/include/c++/9 -I/usr/include/x86_64-linux-gnu/c++/9 -I/usr/include/c++/9/backward -I/usr/lib/gcc/x86_64-linux-gnu/9/include -I/usr/local/include -I/usr/include/x86_64-linux-gnu -I/usr/include ../Drone/src/core/DataDispatcher.h -o moc_DataDispatcher.cpp
+
+moc_DroneManager.cpp: ../Drone/src/core/DroneManager.h \
+		../Drone/src/model/DroneInfo.h \
+		moc_predefs.h \
+		/usr/lib/qt5/bin/moc
+	/usr/lib/qt5/bin/moc $(DEFINES) --include /home/xuedaon/桌面/code/Project/Drone/build-Drone-unknown-Debug/moc_predefs.h -I/usr/lib/x86_64-linux-gnu/qt5/mkspecs/linux-g++ -I/home/xuedaon/桌面/code/Project/Drone/Drone -I/usr/include/x86_64-linux-gnu/qt5 -I/usr/include/x86_64-linux-gnu/qt5/QtWidgets -I/usr/include/x86_64-linux-gnu/qt5/QtGui -I/usr/include/x86_64-linux-gnu/qt5/QtSql -I/usr/include/x86_64-linux-gnu/qt5/QtCore -I. -I/usr/include/c++/9 -I/usr/include/x86_64-linux-gnu/c++/9 -I/usr/include/c++/9/backward -I/usr/lib/gcc/x86_64-linux-gnu/9/include -I/usr/local/include -I/usr/include/x86_64-linux-gnu -I/usr/include ../Drone/src/core/DroneManager.h -o moc_DroneManager.cpp
+
+moc_MavlinkParser.cpp: ../Drone/src/protocol/MavlinkParser.h \
+		../Drone/src/protocol/MavlinkMessage.h \
+		../Drone/src/model/DroneInfo.h \
+		moc_predefs.h \
+		/usr/lib/qt5/bin/moc
+	/usr/lib/qt5/bin/moc $(DEFINES) --include /home/xuedaon/桌面/code/Project/Drone/build-Drone-unknown-Debug/moc_predefs.h -I/usr/lib/x86_64-linux-gnu/qt5/mkspecs/linux-g++ -I/home/xuedaon/桌面/code/Project/Drone/Drone -I/usr/include/x86_64-linux-gnu/qt5 -I/usr/include/x86_64-linux-gnu/qt5/QtWidgets -I/usr/include/x86_64-linux-gnu/qt5/QtGui -I/usr/include/x86_64-linux-gnu/qt5/QtSql -I/usr/include/x86_64-linux-gnu/qt5/QtCore -I. -I/usr/include/c++/9 -I/usr/include/x86_64-linux-gnu/c++/9 -I/usr/include/c++/9/backward -I/usr/lib/gcc/x86_64-linux-gnu/9/include -I/usr/local/include -I/usr/include/x86_64-linux-gnu -I/usr/include ../Drone/src/protocol/MavlinkParser.h -o moc_MavlinkParser.cpp
+
+moc_SimulatedLink.cpp: ../Drone/src/protocol/SimulatedLink.h \
+		../Drone/src/model/DroneInfo.h \
+		moc_predefs.h \
+		/usr/lib/qt5/bin/moc
+	/usr/lib/qt5/bin/moc $(DEFINES) --include /home/xuedaon/桌面/code/Project/Drone/build-Drone-unknown-Debug/moc_predefs.h -I/usr/lib/x86_64-linux-gnu/qt5/mkspecs/linux-g++ -I/home/xuedaon/桌面/code/Project/Drone/Drone -I/usr/include/x86_64-linux-gnu/qt5 -I/usr/include/x86_64-linux-gnu/qt5/QtWidgets -I/usr/include/x86_64-linux-gnu/qt5/QtGui -I/usr/include/x86_64-linux-gnu/qt5/QtSql -I/usr/include/x86_64-linux-gnu/qt5/QtCore -I. -I/usr/include/c++/9 -I/usr/include/x86_64-linux-gnu/c++/9 -I/usr/include/c++/9/backward -I/usr/lib/gcc/x86_64-linux-gnu/9/include -I/usr/local/include -I/usr/include/x86_64-linux-gnu -I/usr/include ../Drone/src/protocol/SimulatedLink.h -o moc_SimulatedLink.cpp
 
 compiler_moc_objc_header_make_all:
 compiler_moc_objc_header_clean:
@@ -480,10 +520,22 @@ compiler_clean: compiler_moc_predefs_clean compiler_moc_header_clean compiler_ui
 
 ####### Compile
 
-main.o: ../Drone/main.cpp ../Drone/mainwindow.h
+main.o: ../Drone/main.cpp ../Drone/mainwindow.h \
+		../Drone/src/core/DataDispatcher.h \
+		../Drone/src/model/DroneInfo.h \
+		../Drone/src/core/DroneManager.h \
+		../Drone/src/protocol/SimulatedLink.h \
+		../Drone/src/protocol/MavlinkParser.h \
+		../Drone/src/protocol/MavlinkMessage.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o main.o ../Drone/main.cpp
 
 mainwindow.o: ../Drone/mainwindow.cpp ../Drone/mainwindow.h \
+		../Drone/src/core/DataDispatcher.h \
+		../Drone/src/model/DroneInfo.h \
+		../Drone/src/core/DroneManager.h \
+		../Drone/src/protocol/SimulatedLink.h \
+		../Drone/src/protocol/MavlinkParser.h \
+		../Drone/src/protocol/MavlinkMessage.h \
 		../Drone/ui_mainwindow.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o mainwindow.o ../Drone/mainwindow.cpp
 
@@ -502,10 +554,12 @@ PathPlanner.o: ../Drone/src/algorithm/PathPlanner.cpp
 CommandSender.o: ../Drone/src/core/CommandSender.cpp 
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o CommandSender.o ../Drone/src/core/CommandSender.cpp
 
-DataDispatcher.o: ../Drone/src/core/DataDispatcher.cpp 
+DataDispatcher.o: ../Drone/src/core/DataDispatcher.cpp ../Drone/src/core/DataDispatcher.h \
+		../Drone/src/model/DroneInfo.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o DataDispatcher.o ../Drone/src/core/DataDispatcher.cpp
 
-DroneManager.o: ../Drone/src/core/DroneManager.cpp 
+DroneManager.o: ../Drone/src/core/DroneManager.cpp ../Drone/src/core/DroneManager.h \
+		../Drone/src/model/DroneInfo.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o DroneManager.o ../Drone/src/core/DroneManager.cpp
 
 TelemetryReceiver.o: ../Drone/src/core/TelemetryReceiver.cpp 
@@ -523,10 +577,13 @@ FlightLogDAO.o: ../Drone/src/database/FlightLogDAO.cpp
 GeoFenceDAO.o: ../Drone/src/database/GeoFenceDAO.cpp 
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o GeoFenceDAO.o ../Drone/src/database/GeoFenceDAO.cpp
 
-MavlinkParser.o: ../Drone/src/protocol/MavlinkParser.cpp 
+MavlinkParser.o: ../Drone/src/protocol/MavlinkParser.cpp ../Drone/src/protocol/MavlinkParser.h \
+		../Drone/src/protocol/MavlinkMessage.h \
+		../Drone/src/model/DroneInfo.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o MavlinkParser.o ../Drone/src/protocol/MavlinkParser.cpp
 
-SimulatedLink.o: ../Drone/src/protocol/SimulatedLink.cpp 
+SimulatedLink.o: ../Drone/src/protocol/SimulatedLink.cpp ../Drone/src/protocol/SimulatedLink.h \
+		../Drone/src/model/DroneInfo.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o SimulatedLink.o ../Drone/src/protocol/SimulatedLink.cpp
 
 GeoFenceWidget.o: ../Drone/src/ui/GeoFenceWidget.cpp 
@@ -558,6 +615,18 @@ Logger.o: ../Drone/src/utils/Logger.cpp
 
 moc_mainwindow.o: moc_mainwindow.cpp 
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o moc_mainwindow.o moc_mainwindow.cpp
+
+moc_DataDispatcher.o: moc_DataDispatcher.cpp 
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o moc_DataDispatcher.o moc_DataDispatcher.cpp
+
+moc_DroneManager.o: moc_DroneManager.cpp 
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o moc_DroneManager.o moc_DroneManager.cpp
+
+moc_MavlinkParser.o: moc_MavlinkParser.cpp 
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o moc_MavlinkParser.o moc_MavlinkParser.cpp
+
+moc_SimulatedLink.o: moc_SimulatedLink.cpp 
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o moc_SimulatedLink.o moc_SimulatedLink.cpp
 
 ####### Install
 
