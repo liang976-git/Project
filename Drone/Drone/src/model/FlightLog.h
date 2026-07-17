@@ -21,4 +21,13 @@ struct FlightLog {
     QString status;
 };
 
+struct FlightLogPoint {
+    int seq;
+    double latitude;
+    double longitude;
+    double altitude;
+    double speed;
+    QString timestamp;
+};
+
 #endif // FLIGHTLOG_H

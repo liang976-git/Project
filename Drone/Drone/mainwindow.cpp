@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 #include <QDebug>
+#include "src/database/DatabaseManager.h"
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -11,6 +12,7 @@ MainWindow::MainWindow(QWidget *parent)
     ,m_parser(new MavlinkParser(this))
 {
     ui->setupUi(this);
+    DatabaseManager::instance().initialize("drone.db");
     connect(m_simLink,&SimulatedLink::telemetryReceived,this,&MainWindow::onTelemetryReceived);
     connect(m_droneManager,&DroneManager::droneStatusChanged,this,&MainWindow::onDroneStatusChanged);
     connect(m_droneManager,&DroneManager::alarmTriggered,this,&MainWindow::onAlarmTriggered);
