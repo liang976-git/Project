@@ -522,6 +522,257 @@ Makefile 管理 24 个 .cpp 的编译顺序和依赖关系
 
 ---
 
+---
+
+## Day 4 — SQLite 数据库层
+
+### 知识点 1：单例模式（Singleton）— 面试必问
+
+**⚠️ 面试题：单例模式有几种实现？各有什么优缺点？**
+
+**本项目用法**：
+```cpp
+class DatabaseManager {
+public:
+    static DatabaseManager &instance();
+private:
+    DatabaseManager();
+    DatabaseManager(const DatabaseManager &) = delete;
+    DatabaseManager &operator=(const DatabaseManager &) = delete;
+};
+```
+
+**三种单例实现对比**：
+
+| 实现方式 | 代码 | 线程安全？ | 延迟初始化？ |
+|---------|------|-----------|-------------|
+| **饿汉式** | 程序启动时创建静态对象 | ✅ 安全 | ❌ 一开始就创建 |
+| **懒汉式 + mutex** | 首次调用时加锁创建 | ✅ 安全 | ✅ 按需创建 |
+| **C++11 局部静态** | `static DatabaseManager db;` | ✅ 安全（C++11标准保证） | ✅ 按需创建 |
+
+**本项目采用的是 C++11 局部静态**，最简洁且安全：
+```cpp
+DatabaseManager &DatabaseManager::instance() {
+    static DatabaseManager db;  // C++11 保证线程安全
+    return db;
+}
+```
+
+**面试追问**：
+- **为什么禁止拷贝？** → 如果允许拷贝，就会创建多个实例，违背单例语义
+- **`delete` 拷贝构造 vs 声明为 private 哪个好？** → `delete` 更好，C++11 语法，编译期报错更清晰
+- **单例有什么缺点？** → ①全局状态，难以测试（mock）；②生命周期不可控；③多线程需额外考虑；④依赖注入是更现代的替代方案
+- **什么时候不用单例？** → 需要多个实例、需要依赖注入测试、需要跨线程共享状态时
+
+---
+
+### 知识点 2：SQL 预编译语句（Prepared Statement）— 面试高频
+
+**⚠️ 面试题：为什么不能直接拼 SQL 字符串？**
+
+**错误写法（SQL 注入风险）**：
+```cpp
+QString sql = "SELECT * FROM drones WHERE name='" + droneName + "'";
+query.exec(sql);
+// 如果 droneName = "'; DROP TABLE drones; --"
+// 整张表就没了
+```
+
+**正确写法（参数化查询）**：
+```cpp
+query.prepare("SELECT * FROM drones WHERE name=?");
+query.addBindValue(droneName);
+query.exec();
+// droneName 是什么内容都安全，SQL 引擎会自动转义
+```
+
+**预编译原理**：
+```
+1. prepare("INSERT INTO ... VALUES(?, ?, ?)")  → SQL 引擎解析语法，生成执行计划
+2. addBindValue(1)                              → 绑定参数值
+3. exec()                                      → 执行，不重新解析 SQL
+```
+
+**三大好处**：
+| 好处 | 说明 |
+|------|------|
+| **防注入** | 参数和 SQL 语法分离，用户输入永远是数据不是代码 |
+| **性能** | 多次执行同一条 SQL 时，只解析一次，后续只换参数 |
+| **可读性** | 比字符串拼接清晰得多 |
+
+**面试追问**：
+- **`?` 占位符和 `:name` 命名占位符的区别？** → `?` 按位置绑定，`:name` 按名字绑定，功能一样，命名的更清晰
+- **SQLite 和 MySQL 的预编译有区别吗？** → MySQL 的预编译是真正在服务端缓存执行计划；SQLite 是单文件库，预编译主要防注入和减少解析次数
+
+---
+
+### 知识点 3：事务（Transaction）与外键约束
+
+**⚠️ 面试题：数据库事务的 ACID 是什么？**
+
+| 特性 | 含义 | 本项目体现 |
+|------|------|-----------|
+| **A** 原子性 | 一组操作要么全成功要么全回滚 | `removeLog` 先删轨迹点再删日志，如果中间失败需要回滚 |
+| **C** 一致性 | 事务前后数据完整性不变 | 外键约束保证不会出现"孤儿"轨迹点 |
+| **I** 隔离性 | 并发事务互不干扰 | SQLite 默认是序列化执行 |
+| **D** 持久性 | 提交后数据永久保存 | SQLite WAL 模式下写入即持久 |
+
+**本项目的外键约束**：
+```sql
+PRAGMA foreign_keys = ON;  -- 必须开启，默认是 OFF！
+
+CREATE TABLE waypoints (
+    ...
+    FOREIGN KEY(path_id) REFERENCES flight_paths(id)
+);
+```
+
+**⚠️ 面试题：SQLite 的外键约束为什么默认关闭？怎么开启？**
+
+- SQLite 为了兼容老版本，默认不检查外键
+- 必须在每次连接后执行 `PRAGMA foreign_keys = ON`
+- 本项目在 `DatabaseManager::initialize()` 里开启
+
+**面试追问**：
+- **DELETE CASCADE 知道吗？** → 级联删除，父表删除时自动删子表关联行。本项目 `removeLog` 手动先删轨迹点，没用 CASCADE
+- **什么时候用事务？** → 批量插入时用事务包裹，性能提升巨大（SQLite 单条插入~10ms，事务包裹批量插入~0.01ms/条）
+
+---
+
+### 知识点 4：RAII 与数据库连接管理
+
+**⚠️ 面试题：RAII 是什么？在数据库编程中怎么用？**
+
+**RAII（Resource Acquisition Is Initialization）**：
+- 资源获取即初始化，C++ 核心编程范式
+- 构造函数获取资源，析构函数释放资源
+- 利用栈对象自动析构的特性，保证资源不泄漏
+
+**本项目的 RAII 体现**：
+```cpp
+// DatabaseManager 析构自动关闭数据库
+DatabaseManager::~DatabaseManager() { close(); }
+
+// QSqlQuery 的 RAII 用法
+{
+    QSqlQuery query(db);   // 构造：绑定数据库连接
+    query.exec("...");
+}   // 析构：query 自动释放
+```
+
+**数据库连接池 vs 单连接**：
+
+| 方案 | 优点 | 缺点 |
+|------|------|------|
+| 单连接（本项目） | 简单，SQLite 本身支持多线程读 | 写操作串行，高并发瓶颈 |
+| 连接池 | 高并发，多连接并行读写 | 复杂，需要管理连接生命周期 |
+
+**面试追问**：
+- **`QSqlDatabase::addDatabase()` 多次调用会怎样？** → 同一个 connectionName 只会创建一个连接，第二次调用会覆盖之前的
+- **智能指针能管理数据库连接吗？** → 可以，`std::shared_ptr<QSqlDatabase>` 但 Qt 自己有对象树管理，一般不需要
+
+---
+
+### 知识点 5：DAO 模式（Data Access Object）— 面试常问
+
+**⚠️ 面试题：什么是 DAO 模式？有什么好处？**
+
+**DAO 模式**：
+```
+业务逻辑层（DroneManager）
+        ↓ 调用
+数据访问层（DroneDAO）    ← 封装所有 SQL 操作
+        ↓ 操作
+数据库（SQLite）
+```
+
+**好处**：
+| 好处 | 说明 |
+|------|------|
+| **解耦** | 业务层不写 SQL，只调 DAO 接口 |
+| **可替换** | 换数据库只改 DAO，业务层不动 |
+| **可测试** | 可以 mock DAO 来测试业务逻辑 |
+| **集中管理** | SQL 集中在 DAO 里，方便优化和维护 |
+
+**本项目的 DAO 结构**：
+```
+DroneDAO      → drones 表 CRUD
+FlightLogDAO  → flight_logs + flight_log_points 表 CRUD
+GeoFenceDAO   → geofence_zones 表 CRUD
+```
+
+**面试追问**：
+- **DAO 和 ORM 的区别？** → DAO 是自己写 SQL 封装；ORM 是自动映射对象到表（如 Hibernate、Qt ORM）
+- **Repository 模式和 DAO 的区别？** → Repository 是 DDD 的概念，更偏向聚合根的操作；DAO 更偏向数据库表级别的 CRUD
+- **什么时候用 ORM 什么时候手写 SQL？** → 简单 CRUD 用 ORM 效率高；复杂查询、性能敏感场景手写 SQL 更灵活
+
+---
+
+### 知识点 6：SQLite 特性与适用场景
+
+**⚠️ 面试题：SQLite 和 MySQL/PostgreSQL 的区别？什么时候用 SQLite？**
+
+| 维度 | SQLite | MySQL/PostgreSQL |
+|------|--------|-----------------|
+| 架构 | 嵌入式，库文件 | C/S 架构，独立服务 |
+| 并发 | 写操作串行 | 多连接并行 |
+| 存储 | 单个 .db 文件 | 服务端管理 |
+| 部署 | 零配置，拷贝即用 | 需要安装配置 |
+| 事务 | 支持，但性能一般 | 完整 ACID，高性能 |
+
+**适用场景**：
+- ✅ 嵌入式应用（本项目、手机 App）
+- ✅ 单机桌面应用
+- ✅ 原型开发、单元测试
+- ✅ 数据量小（< 1TB）
+- ❌ 高并发 Web 服务
+- ❌ 多服务器分布式系统
+
+**面试追问**：
+- **SQLite 的 WAL 模式是什么？** → Write-Ahead Logging，允许读写并发，提升性能
+- **SQLite 支持外键吗？** → 支持，但默认关闭，需要 `PRAGMA foreign_keys = ON`
+- **本项目为什么选 SQLite？** → 单机桌面应用，无需部署数据库服务器，零配置，数据量小
+
+---
+
+### 知识点 7：JSON 在数据库中的存储
+
+**⚠️ 面试题：复杂数据结构怎么存进关系型数据库？**
+
+**本项目的例子**：`GeoFenceZone` 的 `points` 字段是 `QList<QPair<double,double>>`，数据库没有数组类型
+
+**方案对比**：
+
+| 方案 | 做法 | 优点 | 缺点 |
+|------|------|------|------|
+| **JSON 字符串** | 存 `[{lat:39,lng:116},...]` | 灵活，不需要改表结构 | 查询慢，不能用索引 |
+| **关联表** | 单独建 points 表 | 可查询，可索引 | 表多，JOIN 复杂 |
+| **序列化二进制** | protobuf/capnp 序列化 | 体积小，速度快 | 不可读，调试困难 |
+
+**本项目选择 JSON**：
+```cpp
+// 写入：对象 → JSON 字符串
+QJsonArray arr;
+for (const auto &p : zone.points) {
+    QJsonObject obj;
+    obj["lat"] = p.first;
+    obj["lng"] = p.second;
+    arr.append(obj);
+}
+query.addBindValue(QJsonDocument(arr).toJson());
+
+// 读取：JSON 字符串 → 对象
+QJsonDocument doc = QJsonDocument::fromJson(pointsStr.toUtf8());
+QJsonArray arr = doc.array();
+```
+
+**面试追问**：
+- **MySQL 有 JSON 类型吗？** → MySQL 5.7+ 有 JSON 类型，支持 JSON 函数查询，但性能不如原生列
+- **什么时候用 JSON 存储？** → 配置信息、元数据、不需要频繁查询的嵌套数据
+- **SQLite 有 JSON 函数吗？** → SQLite 3.9+ 支持 `json_extract()` 等函数
+
+---
+
 ## 待记录
 
 _后续开发中遇到的问题在此追加_
