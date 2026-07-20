@@ -3,6 +3,8 @@
 #include <cmath>
 #include "src/algorithm/GeoFence.h"
 #include "src/algorithm/CoordTransform.h"
+#include "src/algorithm/DouglasPeucker.h"
+#include "src/algorithm/PathPlanner.h"
 
 static int passed = 0, failed = 0;
 
@@ -150,6 +152,168 @@ void testOutOfChinaPassthrough() {
     TEST("London unchanged lng", near(gcjLng, lng, 1e-10));
 }
 
+void testPointToSegmentDistance() {
+    qDebug() << "=== pointToSegmentDistance ===";
+
+    double d = pointToSegmentDistanceMeters(5, 5, 0, 0, 0, 10);
+    TEST("perpendicular distance", d > 500000 && d < 600000);
+
+    d = pointToSegmentDistanceMeters(0, 0, 0, 0, 0, 10);
+    TEST("point at start", d < 1.0);
+
+    d = pointToSegmentDistanceMeters(0, 10, 0, 0, 0, 10);
+    TEST("point at end", d < 1.0);
+}
+
+void testDouglasPeucker() {
+    qDebug() << "=== DouglasPeucker ===";
+
+    QList<WayPoint> wps;
+    WayPoint wp;
+    wp.altitude = 100; wp.speed = 10; wp.hoverTime = 0; wp.action = 0;
+
+    wp.latitude = 0.0; wp.longitude = 0.0; wps.append(wp);
+    wp.latitude = 0.0001; wp.longitude = 0.0001; wps.append(wp);
+    wp.latitude = 0.0002; wp.longitude = 0.0002; wps.append(wp);
+    wp.latitude = 0.0003; wp.longitude = 0.0003; wps.append(wp);
+    wp.latitude = 0.0004; wp.longitude = 0.0005; wps.append(wp);
+    wp.latitude = 0.0005; wp.longitude = 0.0005; wps.append(wp);
+    wp.latitude = 0.0006; wp.longitude = 0.0006; wps.append(wp);
+    wp.latitude = 0.0007; wp.longitude = 0.0007; wps.append(wp);
+
+    QList<WayPoint> simplified = douglasPeuckerSimplify(wps, 5.0);
+    TEST("simplified has fewer points", simplified.size() < wps.size());
+    TEST("simplified has >= 2 points", simplified.size() >= 2);
+    TEST("first point preserved",
+         simplified.first().latitude == wps.first().latitude &&
+         simplified.first().longitude == wps.first().longitude);
+    TEST("last point preserved",
+         simplified.last().latitude == wps.last().latitude &&
+         simplified.last().longitude == wps.last().longitude);
+
+    QList<WayPoint> small;
+    wp.latitude = 0; wp.longitude = 0; small.append(wp);
+    wp.latitude = 1; wp.longitude = 1; small.append(wp);
+    QList<WayPoint> simplifiedSmall = douglasPeuckerSimplify(small, 5.0);
+    TEST("2 points unchanged", simplifiedSmall.size() == 2);
+}
+
+void testAStar() {
+    qDebug() << "=== AStarSearch ===";
+
+    GridConfig grid;
+    grid.minLat = 39.90;
+    grid.minLng = 116.38;
+    grid.maxLat = 39.96;
+    grid.maxLng = 116.44;
+    grid.resolutionMeters = 100.0;
+
+    GeoFenceZone fence;
+    fence.id = 1;
+    fence.enabled = true;
+    fence.type = Circle;
+    fence.centerLat = 39.93;
+    fence.centerLng = 116.41;
+    fence.radius = 500;
+
+    QList<GeoFenceZone> fences;
+    fences.append(fence);
+
+    QList<QPair<double, double>> path = aStarSearch(
+        39.91, 116.39,
+        39.95, 116.43,
+        fences, grid);
+
+    TEST("path not empty", !path.isEmpty());
+    TEST("path has multiple points", path.size() >= 2);
+
+    if (!path.isEmpty()) {
+        QList<int> conflicts;
+        bool conflict = checkPathFenceConflict(path, fences, conflicts);
+        TEST("path avoids fence", !conflict);
+    }
+}
+
+void testGenerateFlightPath() {
+    qDebug() << "=== generateFlightPath ===";
+
+    QList<QPair<double, double>> route;
+    route.append({39.91, 116.39});
+    route.append({39.92, 116.40});
+    route.append({39.93, 116.41});
+
+    FlightPath fp = generateFlightPath(route, "TestFlight", 15.0);
+
+    TEST("name correct", fp.name == "TestFlight");
+    TEST("waypoint count", fp.waypoints.size() == 3);
+    TEST("total distance > 0", fp.totalDistance > 0);
+    TEST("estimated time > 0", fp.estimatedTime > 0);
+    TEST("waypoint altitude set", fp.waypoints[0].altitude == 100.0);
+    TEST("waypoint speed set", fp.waypoints[0].speed == 15.0);
+}
+
+void testCheckPathFenceConflict() {
+    qDebug() << "=== checkPathFenceConflict ===";
+
+    GeoFenceZone fence;
+    fence.id = 1;
+    fence.enabled = true;
+    fence.type = Circle;
+    fence.centerLat = 39.93;
+    fence.centerLng = 116.41;
+    fence.radius = 1000;
+
+    QList<GeoFenceZone> fences;
+    fences.append(fence);
+
+    QList<QPair<double, double>> safeRoute;
+    safeRoute.append({39.90, 116.38});
+    safeRoute.append({39.90, 116.44});
+
+    QList<int> conflicts;
+    bool conflict = checkPathFenceConflict(safeRoute, fences, conflicts);
+    TEST("safe route no conflict", !conflict);
+
+    QList<QPair<double, double>> badRoute;
+    badRoute.append({39.92, 116.40});
+    badRoute.append({39.94, 116.42});
+
+    QList<int> conflicts2;
+    bool conflict2 = checkPathFenceConflict(badRoute, fences, conflicts2);
+    TEST("bad route has conflict", conflict2);
+    TEST("conflict fence id recorded", conflicts2.contains(1));
+}
+
+void testAutoAvoidFences() {
+    qDebug() << "=== autoAvoidFences ===";
+
+    GridConfig grid;
+    grid.minLat = 39.90;
+    grid.minLng = 116.38;
+    grid.maxLat = 39.96;
+    grid.maxLng = 116.44;
+    grid.resolutionMeters = 100.0;
+
+    GeoFenceZone fence;
+    fence.id = 1;
+    fence.enabled = true;
+    fence.type = Circle;
+    fence.centerLat = 39.93;
+    fence.centerLng = 116.41;
+    fence.radius = 500;
+
+    QList<GeoFenceZone> fences;
+    fences.append(fence);
+
+    QList<QPair<double, double>> result = autoAvoidFences(
+        39.91, 116.39,
+        39.95, 116.43,
+        fences, grid);
+
+    TEST("result not empty", !result.isEmpty());
+    TEST("result has multiple points", result.size() >= 2);
+}
+
 int main(int argc, char *argv[]) {
     QCoreApplication app(argc, argv);
 
@@ -161,6 +325,13 @@ int main(int argc, char *argv[]) {
     testIsNearFence();
     testCoordTransform();
     testOutOfChinaPassthrough();
+
+    testPointToSegmentDistance();
+    testDouglasPeucker();
+    testAStar();
+    testGenerateFlightPath();
+    testCheckPathFenceConflict();
+    testAutoAvoidFences();
 
     qDebug() << "";
     qDebug() << "=== 结果:" << passed << "passed," << failed << "failed ===";
