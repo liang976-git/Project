@@ -25,4 +25,4 @@ private:
     int m_tick;
 };
 
-#endif SIMULATEDLINK_H
+#endif // SIMULATEDLINK_H

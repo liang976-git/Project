@@ -20,4 +20,4 @@ const uint8_t MSG_GLOBAL_POS=33;
 const uint8_t MSG_VFR_HUD=74;
 const uint8_t STX=0XFD;
 
-#endif MAVLINKMESSAGE_H
+#endif // MAVLINKMESSAGE_H

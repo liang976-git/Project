@@ -23,4 +23,4 @@ private:
 };
 
 
-#endif MAVLINKPARSER_H
+#endif // MAVLINKPARSER_H

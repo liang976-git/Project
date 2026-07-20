@@ -1096,7 +1096,87 @@ struct WayPoint {
 
 ---
 
-## 待记录
+## Day 7 — 模块联调 + 阶段二验收
 
-_后续开发中遇到的问题在此追加_
+### Bug 1：FlightLogDAO::removeLog 缺少事务保护
+
+- **问题**：先 `DELETE flight_log_points` 再 `DELETE flight_logs`，如果第二步失败，航点已丢失而日志还在，数据不一致
+- **修复**：用 `db.transaction()` / `db.commit()` / `db.rollback()` 包裹，两步要么全成功要么全回滚
+- **知识点**：⚠️ 数据库事务 — ACID 的原子性
+
+**⚠️ 面试题：什么时候应该用事务？**
+
+| 场景 | 是否需事务 | 原因 |
+|------|-----------|------|
+| 单条 INSERT | ❌ 不需要 | 单条操作本身就是原子的 |
+| 批量 INSERT（1000条） | ✅ 强烈建议 | 事务包裹后速度提升 100 倍（一次磁盘写入 vs 1000次） |
+| 关联表级联删除（本项目） | ✅ 必须 | 两步操作，防止部分成功导致数据不一致 |
+| 转账（A扣款 → B加款） | ✅ 必须 | 业务要求原子性 |
+
+**面试追问**：
+- **SQLite 事务和 MySQL 事务有区别吗？** → SQLite 默认自动提交，每句 SQL 一个事务；MySQL InnoDB 也是自动提交。手动 `BEGIN TRANSACTION` 可以把多个语句合并到一个事务
+- **事务隔离级别有哪些？** → READ UNCOMMITTED / READ COMMITTED / REPEATABLE READ / SERIALIZABLE。SQLite 默认 SERIALIZABLE，最严格
+
+---
+
+### Bug 2：SimulatedLink 电量初始化异常
+
+- **问题**：`bounded(20) * 0.1` 导致电量始终是 80 或 81，本意是 80-99 随机
+- **原因**：`* 0.1` 把整数随机范围 0-19 压缩到 0.0-1.9，加 80 后永远是 80-81
+- **修复**：去掉 `* 0.1`，改为 `bounded(20)` 直接得到 0-19 整数
+- **知识点**：⚠️ 隐式类型转换 — int → double → int 的精度丢失
+
+**⚠️ 面试题：C++ 隐式类型转换有哪些风险？**
+
+```cpp
+int x = 3;
+double y = 2.7;
+int z = x + y;  // z = 5，小数部分被丢弃！
+```
+
+**本项目 Bug 分析**：
+```cpp
+// 原代码
+drone.batteryPercent = 80 + QRandomGenerator::global()->bounded(20) * 0.1;
+// 执行顺序：
+//   1. bounded(20) → int (0-19)
+//   2. int * 0.1 → double (0.0-1.9)    ← int 被隐式提升为 double
+//   3. 80 + double → double (80.0-81.9)
+//   4. 赋值给 int → 截断为 80 或 81   ← 精度丢失
+```
+
+---
+
+### Bug 3：MavlinkParser 缺失方法实现
+
+- **问题**：`encodeVfrHud`、`encodeSysStatus`、`decodeGlobalPosition`、`decodeSysStatus` 4个方法只有声明没有实现，如果被调用会链接失败
+- **修复**：补全全部实现，encode 系列序列化数据到帧，decode 系列反序列化帧到 DroneInfo
+- **知识点**：⚠️ C++ 链接错误 — 声明和定义必须匹配
+
+### Bug 4：`#endif` 注释不规范
+
+- **问题**：`#endif MAVLINKMESSAGE_H` 等写法不符合 C++ 标准（`#endif` 后面只能跟注释）
+- **修复**：改为 `#endif // MAVLINKMESSAGE_H`
+- **知识点**：⚠️ 预处理器指令语法
+
+---
+
+### 阶段二验收总结
+
+**测试结果**：
+- **算法测试**：53/53 通过
+- **数据库测试**：全部 CRUD 操作通过
+- **数据流全链路**：主程序启动 → 数据库建表 → 模拟5架无人机 → ZeroMQ PUB 分发 → 控制台正确输出遥测
+- **编译**：0 error, 0 warning
+
+**阶段二完成的功能**：
+1. ✅ SQLite 数据库：7 张表，3 个 DAO，完整 CRUD
+2. ✅ 地理围栏：3 种形状检测（圆/矩形/多边形）+ 缓冲区预警
+3. ✅ 坐标变换：WGS84 ↔ GCJ02 ↔ BD09 全套
+4. ✅ 路径规划：A* 搜索 + Douglas-Peucker 简化 + 禁飞区规避
+5. ✅ 数据流全链路：模拟 → 解析 → 分发 → 管理 → 入库
+
+**项目总进度**：37/90 任务完成 (41%)
+
+---
 

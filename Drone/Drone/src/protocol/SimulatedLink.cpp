@@ -29,7 +29,7 @@ void SimulatedLink::initDrones(int count){
         drone.speed=5.0+QRandomGenerator::global()->bounded(10);
         drone.verticalSpeed=0.0;
         drone.heading=QRandomGenerator::global()->bounded(360);
-        drone.batteryPercent=80+QRandomGenerator::global()->bounded(20)*0.1;
+        drone.batteryPercent=80+QRandomGenerator::global()->bounded(20);
         drone.signalStr=70+QRandomGenerator::global()->bounded(30);
         drone.timestamp=QDateTime::currentMSecsSinceEpoch();
         drone.lastHeartbeat=QDateTime::currentDateTime().toString("HH:mm:ss");

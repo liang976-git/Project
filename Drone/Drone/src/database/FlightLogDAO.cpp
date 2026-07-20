@@ -71,17 +71,24 @@ bool FlightLogDAO::insertPoint(int logId,const FlightLogPoint &point){
     return true;
 }
 bool FlightLogDAO::removeLog(int logId){
-    QSqlQuery query(DatabaseManager::instance().database());
+    QSqlDatabase db = DatabaseManager::instance().database();
+    db.transaction();
+    QSqlQuery query(db);
     query.prepare("delete from flight_log_points where log_id=?");
     query.addBindValue(logId);
-    query.exec();
-
+    if(!query.exec()){
+        qDebug()<<"FlightLogDAO removeLog points error:"<<query.lastError().text();
+        db.rollback();
+        return false;
+    }
     query.prepare("delete from flight_logs where id=?");
     query.addBindValue(logId);
     if(!query.exec()){
         qDebug()<<"FlightLogDAO removeLog error:"<<query.lastError().text();
+        db.rollback();
         return false;
     }
+    db.commit();
     return true;
 }
 FlightLog FlightLogDAO::findById(int logId) const{
