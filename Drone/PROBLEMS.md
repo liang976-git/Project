@@ -1180,3 +1180,247 @@ drone.batteryPercent = 80 + QRandomGenerator::global()->bounded(20) * 0.1;
 
 ---
 
+## Day 8 — 主窗口框架 + 无人机列表 UI
+
+### 知识点 1：QSplitter 布局（面试常考）
+
+**⚠️ 面试题：QSplitter vs QHBoxLayout 的区别？**
+
+| 特性 | QSplitter | QHBoxLayout |
+|------|-----------|-------------|
+| 用户可拖拽调整 | ✅ 有拖拽手柄 | ❌ 自动分配固定比例 |
+| 最小尺寸 | `setMinimumSize` | 同样支持 |
+| 伸缩因子 | `setStretchFactor(idx, 0/1)` | `setStretchFactor` |
+| 嵌套 | ✅ 水平和垂直可嵌套 | ✅ 同样支持 |
+| 保存状态 | `saveState()` / `restoreState()` | ❌ 不支持 |
+| 典型场景 | IDE 面板、文件管理器 | 表单、按钮行 |
+| 本项目 | 主窗口三栏：左200px/中伸缩/右280px | 子面板内部布局 |
+
+```cpp
+// 三栏布局核心代码
+m_mainSplitter = new QSplitter(Qt::Horizontal, this);
+m_mainSplitter->addWidget(leftPanel);    // index 0
+m_mainSplitter->addWidget(m_centerStack); // index 1
+m_mainSplitter->addWidget(m_flightParam); // index 2
+m_mainSplitter->setStretchFactor(0, 0);  // 左不伸缩
+m_mainSplitter->setStretchFactor(1, 1);  // 中伸缩
+m_mainSplitter->setStretchFactor(2, 0);  // 右不伸缩
+m_mainSplitter->setSizes({200, 700, 280});
+```
+
+**面试追问**：
+- **QSplitter 的数据是怎么保存的？** → `saveState()` 返回 QByteArray，用 `QSettings` 保存到注册表，下次启动时 `restoreState()` 恢复
+- **splitter 的 Handle 能自定义吗？** → 可以，`setHandleWidth()` 和 `setChildrenCollapsible(false)`
+
+---
+
+### 知识点 2：QStackedWidget 页面切换模式
+
+**⚠️ 面试题：QStackedWidget vs QTabWidget vs QDialog（弹出窗口）页面切换方案对比**
+
+| 方案 | 特点 | 适合场景 |
+|------|------|---------|
+| **QStackedWidget + QListWidget**（本项目） | 导航栏和内容区分离，页面切换无缝 | 监控系统、后台管理，导航在左侧 |
+| **QTabWidget** | 自带标签页头，自带切换 | 设置对话框、少页面（<5）场景 |
+| **QDialog** | 弹出独立窗口，模态/非模态 | 临时编辑、设置弹窗 |
+| **QStackedWidget + QPushButton** | 按钮控制切换 | 引导流程 A→B→C→完成 |
+
+---
+
+### 知识点 3：QTableWidget（面试必问）
+
+**⚠️ 面试题：QTableWidget vs QTableView + QAbstractTableModel？**
+
+```cpp
+// 为什么本项目选 QTableWidget
+QTableWidget *table = new QTableWidget(0, 5, this);
+table->setHorizontalHeaderLabels({"ID", "名称", "状态", "电量", "信号"});
+table->setItem(row, 0, new QTableWidgetItem("1"));                // 文本
+table->setItem(row, 1, new QTableWidgetItem("UAV-01"));           // 文本
+auto *statusItem = new QTableWidgetItem("飞行中");
+statusItem->setForeground(QColor("#27ae60"));                     // 颜色
+table->setItem(row, 2, statusItem);
+table->setCellWidget(row, 3, new QProgressBar);                    // 嵌入 Widget！
+```
+
+| 对比 | QTableWidget | QTableView + Model |
+|------|-------------|-------------------|
+| 代码量 | 少，setItem / setCellWidget 直接操作 | 多，需要定义 Model 类 |
+| 数据量 | < 100 行 | > 1000 行 |
+| 自定义控件 | ✅ `setCellWidget` 一行嵌入 | ⚠️ 需要 delegate |
+| 排序 | `setSortingEnabled(true)` 内置 | 需在 Model 中重写 sort |
+| 拖拽 | 支持 | 需额外代码 |
+| 本项目选 | ✅ 无人机最多几十架 | ❌ 过度设计 |
+
+**⚠️ 面试题：为什么电池用 QProgressBar 而不是画图？**
+
+`setCellWidget(row, col, widget)` 是 QTableWidget 的核心优势——单元格里可以放任何 QWidget（按钮、进度条、下拉框、甚至另一个表格），不需要手写 QPainter。
+
+```cpp
+auto *bar = new QProgressBar;
+bar->setRange(0, 100);
+bar->setValue(d.batteryPercent);
+bar->setStyleSheet("QProgressBar::chunk{background:#27ae60;}");  // 绿色
+m_table->setCellWidget(row, 3, bar);   // 嵌入
+```
+
+---
+
+### 知识点 4：Qt 的 Item Data 机制
+
+**⚠️ 面试题：Qt::UserRole 是干什么的？怎么用？**
+
+```cpp
+// 存：每个表格行藏一个「无人机ID」
+auto *idItem = new QTableWidgetItem("1");
+idItem->setData(Qt::UserRole, 1);      // 存 int
+m_table->setItem(row, 0, idItem);
+
+// 取：选中某行时取出藏着的 ID
+int droneId = m_table->item(row, 0)->data(Qt::UserRole).toInt();
+```
+
+**Qt 预定义的 ItemRole**：
+
+| Role | 类型 | 作用 |
+|------|------|------|
+| `Qt::DisplayRole` | QString | 显示的文本（默认） |
+| `Qt::ForegroundRole` | QColor / QBrush | 文字颜色 |
+| `Qt::BackgroundRole` | QBrush | 背景颜色 |
+| `Qt::FontRole` | QFont | 字体 |
+| `Qt::TextAlignmentRole` | Qt::Alignment | 对齐方式 |
+| `Qt::UserRole` | QVariant | 用户任意数据（如存 ID） |
+| `Qt::UserRole + 1` | QVariant | 可以继续扩展 |
+
+**面试追问**：
+- **UserRole 和 UserRole+1 有什么区别？** → 没有区别，只是一种命名约定，让你可以存多种不同类型的数据
+- **QTableWidgetItem 的生命周期？** → 一旦 `setItem`，QTableWidget 接管所有权，不需要手动 delete
+
+---
+
+### 知识点 5：QGroupBox + QFormLayout 参数面板
+
+**⚠️ 面试题：QGroupBox vs QFrame？**
+
+| 特性 | QGroupBox | QFrame |
+|------|-----------|--------|
+| 标题 | ✅ 内置标题 `new QGroupBox("位置")` | ❌ 需要额外 QLabel |
+| 可勾选 | ✅ `setCheckable(true)` 整组开关 | ❌ |
+| 快捷键 | ✅ Alt+字母聚焦子控件 | ❌ |
+| 快捷键例子 | `new QGroupBox("&位置")` → Alt+W 聚焦 | ❌ |
+
+**QFormLayout vs QGridLayout 场景对比**：
+
+```cpp
+// QFormLayout（本项目）— 代码少
+auto *form = new QFormLayout;
+form->addRow("纬度:", latValue);   // ← 一行搞定
+form->addRow("经度:", lngValue);
+
+// QGridLayout — 代码多，但布局更灵活
+auto *grid = new QGridLayout;
+grid->addWidget(new QLabel("纬度:"), 0, 0);
+grid->addWidget(latValue, 0, 1);
+grid->addWidget(new QLabel("经度:"), 1, 0);
+grid->addWidget(lngValue, 1, 1);
+```
+
+---
+
+### 知识点 6：QLabel 富文本
+
+**⚠️ 面试题：QLabel 支持 HTML 吗？**
+
+QLabel 支持 HTML 子集（`<span>`、`<b>`、`<font>`、`<a>`、`<img>`），适合简单的富文本场景。
+
+```cpp
+// 同一行不同颜色
+m_nameLabel->setText(
+    QString("<span style='color:#2c3e50;'>%1</span>"
+            "<span style='color:#7f8c8d;'> (ID:%2)</span>")
+    .arg(drone.name).arg(drone.id));
+```
+
+**优点**：不需要两个 QLabel + 一个 QHBoxLayout，一个 QLabel 搞定。
+**缺点**：不支持复杂 HTML（表格、表单、div），复杂的富文本应该用 QTextBrowser 或 QTextDocument。
+
+---
+
+### 知识点 7：QProgressBar 动态换色
+
+```cpp
+m_batteryBar->setValue(drone.batteryPercent);
+QString color = d.batteryPercent > 60 ? "#27ae60" :
+                d.batteryPercent > 20 ? "#f39c12" : "#e74c3c";
+m_batteryBar->setStyleSheet(
+    "QProgressBar::chunk{ background:" + color + "; }");
+```
+
+**⚠️ 面试题：setStyleSheet 和直接 setProperty 哪个好？**
+- `setStyleSheet`：每次设置都会重新解析 CSS，频繁调用（100ms）有性能开销
+- `setProperty` + `polish`：不重新解析 CSS，性能更好
+- 本项目：5 架无人机 × 每秒 10 次 = 50 次 QSS 解析/秒，完全可接受
+
+---
+
+### 知识点 8：QTimer 更新时钟
+
+```cpp
+m_timer = new QTimer(this);
+connect(m_timer, &QTimer::timeout, this, &StatusBarWidget::updateTime);
+m_timer->start(1000);
+```
+
+**⚠️ 面试题：QTimer 有哪些精度问题？**
+- QTimer 依赖事件循环，如果主线程有耗时操作（如数据库查询），定时器会延迟
+- 精度通常是 1ms（Linux timerfd），但实际触发频率受事件循环影响
+- `Qt::PreciseTimer` vs `Qt::CoarseTimer`：精确 vs 省电（精度 5% 误差可接受）
+- 本项目用 `Qt::CoarseTimer`（默认），更新时间不需要精确到毫秒
+
+**QTimer 实现原理**（Linux）：
+```
+QTimer::start(1000)
+    ↓
+Qt 调用 timerfd_create() 创建定时器 fd
+    ↓
+epoll 监听该 fd，1000ms 后可读
+    ↓
+事件循环读取 fd → 生成 QTimerEvent
+    ↓
+QObject::timerEvent() → emit timeout()
+```
+
+---
+
+### 知识点 9：QSS 常见坑
+
+本项目中遇到的 QSS 错误：
+
+| 错误写法 | 正确写法 | 问题 |
+|---------|---------|------|
+| `border-botton` | `border-bottom` | 拼写错误 |
+| `QListWidget::item::seleted` | `QListWidget::item:selected` | 伪状态用单冒号 + 拼写 |
+| `font-weight：bold` | `font-weight:bold` | 冒号是全角：而不是半角: |
+| `border-redius` | `border-radius` | 拼写错误 |
+| `boder-radius` | `border-radius` | 拼写错误（缺 r） |
+
+**调试方法**：运行程序时注意控制台报 `Unknown property XXX`，QSS 不会报编译错误，只会运行时警告。
+
+---
+
+### 当天总结
+
+**Day 8 验收**：
+- ✅ MainWindow 三栏布局（QSplitter）
+- ✅ 导航菜单（QListWidget + QStackedWidget）
+- ✅ 无人机列表（QTableWidget + 状态颜色 + 电量进度条）
+- ✅ 飞行参数面板（QGroupBox + QFormLayout）
+- ✅ 底部状态栏（QHBoxLayout + QTimer 更新时间）
+- ✅ 数据联动：模拟链路 → DroneManager → 列表刷新 + 参数面板更新
+- ✅ 编译：0 error, 0 warning, 0 crash
+- ✅ QSS：0 解析警告
+
+**项目进度**：41/90 任务完成 (45.6%)
+
+---
+
