@@ -27,6 +27,7 @@ public:
     void updateDronePosition(const DroneInfo &drone);
     void updateDronePositions(const QList<DroneInfo> &drones);
     void addTrailPoint(int droneId, double lng, double lat);
+    QWebEngineView *view() const { return m_view; }
 
 private:
     void setupUI();

@@ -1714,6 +1714,136 @@ m_mapWidget->page()->javaScriptConsoleMessage(
 - ⏳ 高德 Key：需要你替换 `YOUR_KEY_HERE` 为有效 Key
 - ⏳ 地图验证：有 Key 后运行确认地图加载和无人机标记
 
-**项目进度**：44/90 任务完成 (48.9%) — 待 Key 后可更新地图相关任务
+**项目进度**：46/90 任务完成 (51.1%) — 待 Key 后可更新地图相关任务
+
+---
+
+## Day 11 — 地图图层 + 禁飞区可视化 + Bug 修复
+
+### Bug 修复：地图晃动
+
+**现象**：地图在 5 架无人机位置之间来回弹跳。
+
+**原因**：`onTelemetryReceived` 每 100ms 收到 5 架无人机数据，每调用一次 `updateMarker` 都会执行 `map.setCenter([lng, lat])`，等于在 5 个坐标间快速切换。
+
+**修复**：删除 `updateMarker` 中的 `map.setCenter()`，地图停留在用户拖拽的位置。
+
+```javascript
+// 修复前
+markers[id].setPosition([lng, lat]);
+markers[id].setAngle(heading);
+map.setCenter([lng, lat]);   // ← 5架×10次/秒 = 50次setCenter
+
+// 修复后
+markers[id].setPosition([lng, lat]);
+markers[id].setAngle(heading);
+// setCenter 已删除
+```
+
+---
+
+### 知识点 1：AMap 三种禁飞区形状
+
+```javascript
+// 圆形
+new AMap.Circle({ center: [lng, lat], radius: 500 });
+
+// 矩形
+new AMap.Rectangle({ bounds: new AMap.Bounds([sw], [ne]) });
+
+// 多边形
+new AMap.Polygon({ path: [[lng,lat], [lng,lat], ...] });
+```
+
+**⚠️ 面试题：AMap.Bounds 参数顺序？**
+
+`new AMap.Bounds(min, max)` 接受两个点，**第一个是西南角，第二个是东北角**，与经纬度顺序无关。高德内部自动判断大小。
+
+**`fillOpacity: 0.2` 的设计理由**：
+- 禁飞区遮住地图，完全不透明会遮挡底图信息
+- 20% 透明度 = 红色底可见 + 地图道路依然可辨认
+- 配合 `strokeColor: '#c0392b'` 实线边框 = 醒目但不遮挡
+
+---
+
+### 知识点 2：AMap.InfoWindow 点击弹窗
+
+```javascript
+var infoWindow = new AMap.InfoWindow({ offset: new AMap.Pixel(0, -30) });
+
+marker.on('click', function(e) {
+    infoWindow.setContent('<b>' + name + '</b><br>ID: ' + id);
+    infoWindow.open(map, e.target.getPosition());
+});
+```
+
+**⚠️ 面试题：闭包陷阱 — marker.on('click') 里的变量捕获**
+
+```javascript
+// ❌ 错误写法：循环结束后 name/id/lng/lat 都是最后一个值
+for (var i = 0; i < drones.length; i++) {
+    marker.on('click', function(e) {
+        infoWindow.setContent(drones[i].name);  // i = length-1 后的值
+    });
+}
+
+// ✅ 本项目正确写法：在 if(!markers[id]) 内部注册事件，每个 id 唯一的闭包
+if (!markers[id]) {
+    var m = new AMap.Marker(...);
+    m.on('click', function(e) { ... });  // name/id 都来自当前函数参数
+    markers[id] = m;
+}
+```
+
+---
+
+### 知识点 3：图层显隐控制
+
+**三图层独立控制**：
+
+```javascript
+var layerVisibles = { markers: true, trails: true, fences: true };
+
+function toggleLayer(name, visible) {
+    layerVisibles[name] = visible;
+    if (name === 'markers') {
+        for (var id in markers)
+            markers[id].setMap(visible ? map : null);
+    }
+    // 同理 trails / fences
+}
+```
+
+**`setMap(null)` 和 `setMap(map)` 切换**：
+- `setMap(null)` — 从地图移除，但不销毁对象
+- `setMap(map)` — 重新添加到地图
+- 比 `remove()` + 重建性能好得多
+
+**图层控制 CSS**（右上角浮动面板）：
+```css
+#layerCtrl {
+    position: absolute;
+    top: 10px; right: 10px;
+    background: white;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    padding: 8px 12px;
+    z-index: 1000;
+}
+```
+
+---
+
+### 当天总结
+
+**Day 11 验收**：
+- ✅ 禁飞区图层：Circle / Rectangle / Polygon 三种形状绘制
+- ✅ 禁飞区样式：半透明红底(20%) + 红边框 + 文字标签
+- ✅ 图层控制：右上角浮动面板，显隐无人机/轨迹/禁飞区
+- ✅ 点击弹窗：点击无人机标记弹出 InfoWindow 显示位置信息
+- ✅ Bug 修复：删除 updateMarker 中的 setCenter，地图不再晃动
+- ✅ MapWidget.h：加 view() 访问器，允许外部调用 runJavaScript
+- ✅ 编译：0 error, 0 crash
+
+**项目进度**：46/90 任务完成 (51.1%)
 
 ---

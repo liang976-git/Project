@@ -6,14 +6,30 @@
 <style>
   body, html { margin:0; padding:0; height:100%; width:100%; }
   #container { width:100%; height:100%; }
+  #layerCtrl {
+    position: absolute; top: 10px; right: 10px; z-index: 1000;
+    background: white; border-radius: 4px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    padding: 8px 12px; font-size: 13px;
+  }
+  #layerCtrl label { display: block; margin: 4px 0; cursor: pointer; }
+  #layerCtrl input { margin-right: 6px; }
 </style>
 </head>
 <body>
+<div id="layerCtrl">
+  <label><input type="checkbox" checked onchange="toggleLayer('markers',this.checked)"> 无人机</label>
+  <label><input type="checkbox" checked onchange="toggleLayer('trails',this.checked)"> 轨迹</label>
+  <label><input type="checkbox" checked onchange="toggleLayer('fences',this.checked)"> 禁飞区</label>
+</div>
 <div id="container"></div>
 <script src="https://webapi.amap.com/maps?v=2.0&key=d431cccf8489a6e65d777332dde1eddb"></script>
 <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
 <script>
 var map, markers = {}, trails = {}, bridge;
+var fenceLayers = {};
+var layerVisibles = { markers: true, trails: true, fences: true };
+var infoWindow = new AMap.InfoWindow({ offset: new AMap.Pixel(0, -30) });
 
 new QWebChannel(qt.webChannelTransport, function(channel) {
     bridge = channel.objects.bridge;
@@ -33,15 +49,25 @@ AMap.plugin(['AMap.ToolBar'], function() {
 
 function updateMarker(id, lng, lat, heading, name) {
     if (!markers[id]) {
-        markers[id] = new AMap.Marker({
+        var m = new AMap.Marker({
             position: [lng, lat],
             label: { content: name, offset: new AMap.Pixel(0, -18) }
         });
-        markers[id].setMap(map);
+        m.on('click', function(e) {
+            infoWindow.setContent(
+                '<b>' + name + '</b><br>' +
+                'ID: ' + id + '<br>' +
+                '经度: ' + lng.toFixed(4) + '<br>' +
+                '纬度: ' + lat.toFixed(4) + '<br>' +
+                '航向: ' + heading.toFixed(1) + '°'
+            );
+            infoWindow.open(map, e.target.getPosition());
+        });
+        m.setMap(layerVisibles.markers ? map : null);
+        markers[id] = m;
     }
     markers[id].setPosition([lng, lat]);
     markers[id].setAngle(heading);
-    map.setCenter([lng, lat]);
 }
 
 function updateAllMarkers(drones) {
@@ -57,12 +83,73 @@ function addTrailPoint(droneId, lng, lat) {
             path: [[lng, lat]],
             strokeColor: '#e74c3c',
             strokeWeight: 3,
-            map: map
+            map: layerVisibles.trails ? map : null
         });
     }
     var path = trails[droneId].getPath();
     path.push([lng, lat]);
     trails[droneId].setPath(path);
+}
+
+function addFenceZone(id, type, params) {
+    var zone;
+    if (type === 'circle') {
+        zone = new AMap.Circle({
+            center: [params.lng, params.lat],
+            radius: params.radius,
+            fillColor: '#e74c3c', fillOpacity: 0.2,
+            strokeColor: '#c0392b', strokeWeight: 2
+        });
+    } else if (type === 'rectangle') {
+        zone = new AMap.Rectangle({
+            bounds: new AMap.Bounds([params.swLng, params.swLat], [params.neLng, params.neLat]),
+            fillColor: '#e74c3c', fillOpacity: 0.2,
+            strokeColor: '#c0392b', strokeWeight: 2
+        });
+    } else if (type === 'polygon') {
+        var path = params.paths.map(function(p) { return [p.lng, p.lat]; });
+        zone = new AMap.Polygon({
+            path: path,
+            fillColor: '#e74c3c', fillOpacity: 0.2,
+            strokeColor: '#c0392b', strokeWeight: 2
+        });
+    }
+    if (zone) {
+        var text = new AMap.Text({
+            text: params.name || '禁飞区',
+            position: zone.getBounds().getCenter(),
+            style: { 'font-size': '12px', 'color': '#c0392b', 'font-weight': 'bold' }
+        });
+        zone.setMap(layerVisibles.fences ? map : null);
+        text.setMap(layerVisibles.fences ? map : null);
+        fenceLayers[id] = { zone: zone, text: text };
+    }
+}
+
+function removeFenceZone(id) {
+    if (fenceLayers[id]) {
+        map.remove(fenceLayers[id].zone);
+        map.remove(fenceLayers[id].text);
+        delete fenceLayers[id];
+    }
+}
+
+function clearAllFenceZones() {
+    for (var id in fenceLayers) removeFenceZone(id);
+}
+
+function toggleLayer(name, visible) {
+    layerVisibles[name] = visible;
+    if (name === 'markers') {
+        for (var id in markers) markers[id].setMap(visible ? map : null);
+    } else if (name === 'trails') {
+        for (var id in trails) trails[id].setMap(visible ? map : null);
+    } else if (name === 'fences') {
+        for (var id in fenceLayers) {
+            fenceLayers[id].zone.setMap(visible ? map : null);
+            fenceLayers[id].text.setMap(visible ? map : null);
+        }
+    }
 }
 </script>
 </body>
