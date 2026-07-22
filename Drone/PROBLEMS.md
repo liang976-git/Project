@@ -1424,3 +1424,143 @@ QObject::timerEvent() → emit timeout()
 
 ---
 
+## Day 9 — 自定义仪表盘控件 + 告警面板
+
+### 知识点 1：QPainter 自定义绘制（CompassWidget）
+
+**⚠️ 面试题：paintEvent 的执行流程？**
+
+```
+用户调用 update()
+    ↓
+Qt 将 paintEvent 加入事件队列（合并多个 update 为一次）
+    ↓
+事件循环取出，调用 paintEvent()
+    ↓
+QPainter 开始绘制（双缓冲，不会闪烁）
+    ↓
+绘制完成后 QPainter 自动析构
+```
+
+**`update()` vs `repaint()`**：
+
+| 方法 | 行为 | 推荐 |
+|------|------|------|
+| `update()` | 合并到下一个事件循环，多次调用只重绘一次 | ✅ 推荐 |
+| `repaint()` | 立即重绘，阻塞当前线程 | ❌ 不推荐（可能导致闪烁） |
+
+**QPainter 坐标系统**（面试高频）：
+- 原点左上角，x 向右，y 向下
+- `qDegreesToRadians(deg)` — 角度转弧度
+- `cos(θ+π/2)` 相当于 sin，航向 0° 是北（y 负方向），所以要 `qDegreesToRadians(m_heading - 90)`
+
+**航向箭头数学**：
+```
+航向 0° = 北 = (0, -1) 方向
+QPainter 坐标系 y 轴向下，所以：
+  rad = heading - 90  （0°→-90°=指向正上方）
+  箭头末梢 = (cx + r*cos(rad), cy + r*sin(rad))
+  箭头头部 = 末梢两边各偏 ±20° 画三角形
+```
+
+**⚠️ 面试题：QPainter 反走样原理？**
+`setRenderHint(QPainter::Antialiasing)` 开启多级灰度抗锯齿，代价是绘制效率降低约 30%。对于静态控件（罗盘 100ms 刷新一次）完全可以接受。
+
+---
+
+### 知识点 2：柱状仪表盘实现（AltitudeGaugeWidget）
+
+**设计要点**：
+- 用 `qBound(min, val, max)` 钳制值到 `[0, 500]` 范围
+- 填充比例 `ratio = (val - min) / (max - min)`
+- **三色阶**：<20% 红色（危险）、20-50% 黄色（警告）、>50% 绿色（正常）
+- 虚线参考线在 50% 位置，方便读取
+
+```cpp
+// 核心绘制代码
+double ratio = (m_value - m_min) / (m_max - m_min);
+int fillH = static_cast<int>(barH * ratio);
+int fillY = barY + barH - fillH;  // 从底部向上画
+p.drawRoundedRect(barX, fillY, barW, fillH, 2, 2);
+```
+
+**⚠️ 面试题：为什么 QWidget 的 `paintEvent` 里不能手动 delete painter？**
+`QPainter` 以栈对象创建，构造时传入 `this`，析构时自动结束绘制，手动 `delete` 会导致双重析构。
+
+---
+
+### 知识点 3：AlarmWidget 过滤 + 等级着色
+
+**过滤实现**（不删行，只隐藏）：
+```cpp
+m_table->setRowHidden(r, !visible);  // 性能更好，恢复快
+```
+
+**四档告警等级视觉区分**：
+
+| 等级 | 文字 | 颜色 | 加粗 |
+|------|------|------|------|
+| Info | 提示 | `#3498db`（蓝） | ❌ |
+| Warning | 警告 | `#f39c12`（橙） | ✅ |
+| Critical | 严重 | `#e74c3c`（红） | ✅ |
+| Emergency | 紧急 | 红字 + 粉红底色 | ✅ |
+
+**`QOverload<int>::of` 解决信号歧义**：
+```cpp
+// QComboBox 有两个重载的 currentIndexChanged：
+//   currentIndexChanged(int)
+//   currentIndexChanged(const QString&)  // 已废弃
+// 用 QOverload 明确指定取 int 版本
+connect(m_filter, QOverload<int>::of(&QComboBox::currentIndexChanged),
+        this, &AlarmWidget::applyFilter);
+```
+
+**⚠️ 面试题：ComboBox 新旧语法对比**：
+```cpp
+// 旧语法（运行时检查，字符串不匹配无编译错误）
+connect(m_filter, SIGNAL(currentIndexChanged(int)), this, SLOT(applyFilter(int)));
+
+// 新语法（编译期检查，推荐）
+connect(m_filter, QOverload<int>::of(&QComboBox::currentIndexChanged),
+        this, &AlarmWidget::applyFilter);
+```
+
+---
+
+### 知识点 4：告警自动触发逻辑
+
+在 `onTelemetryReceived` 中实时判断：
+
+```cpp
+if (drone.batteryPercent < 20) {
+    // 构造 AlarmInfo，调用 m_alarmWidget->addAlarm(a)
+}
+if (drone.signalStr < 30) {
+    // signalStr < 15 → Emergency，否则 Warning
+}
+```
+
+**为什么不把告警逻辑放进 DroneManager？**
+- 当前设计：DroneManager 只管数据管理，UI 层决定何时触发告警
+- 关心分离（Separation of Concerns）：
+  - DroneManager：数据存储 + 状态同步
+  - MainWindow：策略层（决定"电量<20% 是什么级别告警"）
+  - AlarmWidget：展示层（只管显示和过滤）
+- 面试常问：**MVC 架构各层职责如何划分？**
+
+---
+
+### 当天总结
+
+**Day 9 验收**：
+- ✅ CompassWidget：QPainter 圆盘 + 箭头 + N/E/S/W 标注 + 航向角度数字
+- ✅ AltitudeGaugeWidget：垂直柱状表 + 三色阶 + 虚线参考线
+- ✅ AlarmWidget：5 列表格 + ComboBox 类型过滤 + 等级着色 + 告警触发
+- ✅ 集成到 MainWindow：导航栏第 6 项"告警中心"→ QStackedWidget 第 6 页
+- ✅ 自动告警：低电量 <30% / 信号弱 <30% 自动插告警行
+- ✅ 编译：0 error, 0 warning, 0 crash
+- ✅ 测试：53/53 算法测试 + 全数据库 CRUD 通过
+
+**项目进度**：44/90 任务完成 (48.9%)
+
+---

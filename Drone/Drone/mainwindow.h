@@ -12,6 +12,7 @@
 #include "src/ui/FlightParameterWidget.h"
 #include "src/ui/StatusBarWidget.h"
 #include "src/ui/DroneListWidget.h"
+#include "src/ui/AlarmWidget.h"
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
@@ -47,5 +48,6 @@ private:
     DroneListWidget *m_droneList;//左下的无人机列表
     FlightParameterWidget *m_flightParam;//右侧参数面板
     StatusBarWidget *m_statusBar;//底部状态栏
+    AlarmWidget *m_alarmWidget;
 };
 #endif // MAINWINDOW_H

@@ -1,4 +1,6 @@
 #include "FlightParameterWidget.h"
+#include "AltitudeGaugeWidget.h"
+#include "CompassWidget.h"
 #include <QVBoxLayout>
 #include <QFormLayout>
 #include <QGroupBox>
@@ -26,20 +28,22 @@ void FlightParameterWidget::setupUI(){
     auto *posForm=new QFormLayout(posGroup);
     m_latValue=new QLabel;
     m_lngValue=new QLabel;
-    m_altValue=new QLabel;
+    m_altGauge = new AltitudeGaugeWidget;
+    m_altGauge->setFixedSize(60, 100);
     posForm->addRow("纬度:",m_latValue);
     posForm->addRow("经度:",m_lngValue);
-    posForm->addRow("高度:",m_altValue);
+    posForm->addRow("高度:",m_altGauge);
     mainLayout->addWidget(posGroup);
     //==运动==
     auto *moveGroup=new QGroupBox("运动");
     auto *moveForm=new QFormLayout(moveGroup);
     m_speedValue=new QLabel;
     m_vSpeedValue=new QLabel;
-    m_headingValue=new QLabel;
+    m_compass = new CompassWidget;
+    m_compass->setFixedSize(80, 80);
     moveForm->addRow("地速:",m_speedValue);
     moveForm->addRow("垂速:",m_vSpeedValue);
-    moveForm->addRow("航向:",m_headingValue);
+    moveForm->addRow("航向:",m_compass);
     mainLayout->addWidget(moveGroup);
     //==状态==
     auto *statGroup=new QGroupBox("状态");
@@ -67,10 +71,10 @@ void FlightParameterWidget::updateData(const DroneInfo &drone){
                          .arg(drone.name).arg(drone.id));
     m_latValue->setText(QString::number(drone.latitude,'f',6)+"°");
     m_lngValue->setText(QString::number(drone.longitude, 'f', 6) + "°");
-    m_altValue->setText(QString::number(drone.altitude, 'f', 1) + " m");
+    m_altGauge->setValue(drone.altitude);
     m_speedValue->setText(QString::number(drone.speed,'f',1)+"m/s");
     m_vSpeedValue->setText(QString::number(drone.verticalSpeed,'f',1)+"m/s");
-    m_headingValue->setText(QString::number(drone.heading,'f',1)+"°");
+    m_compass->setHeading(drone.heading);
     switch(drone.status){
     case DroneStatus::Flying:m_statusValue->setText("飞行中"); break;
     case DroneStatus::Idle:m_statusValue->setText("空闲"); break;
@@ -93,10 +97,10 @@ void FlightParameterWidget::clearData(){
     m_nameLabel->setText("未选择");
     m_latValue->setText("--");
     m_lngValue->setText("--");
-    m_altValue->setText("--");
+    m_altGauge->setValue(0);
     m_speedValue->setText("--");
     m_vSpeedValue->setText("--");
-    m_headingValue->setText("--");
+    m_compass->setHeading(0);
     m_statusValue->setText("--");
     m_batteryBar->setValue(0);
     m_signalalue->setText("--");

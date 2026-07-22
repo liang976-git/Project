@@ -18,10 +18,10 @@ private:
     QLabel *m_nameLabel;
     QLabel *m_latValue;
     QLabel *m_lngValue;
-    QLabel *m_altValue;
+    class AltitudeGaugeWidget *m_altGauge;
     QLabel *m_speedValue;
     QLabel *m_vSpeedValue;
-    QLabel *m_headingValue;
+    class CompassWidget *m_compass;
     QLabel *m_statusValue;
     QProgressBar *m_batteryBar;
     QLabel *m_signalalue;

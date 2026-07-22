@@ -3,7 +3,9 @@
 #include <QDebug>
 #include <QLabel>
 #include <QVBoxLayout>
+#include <QDateTime>
 #include "src/database/DatabaseManager.h"
+#include "src/model/AlarmInfo.h"
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -96,6 +98,8 @@ void MainWindow::setupLayout(){
     permPlaceholder->setAlignment(Qt::AlignCenter);
     permPlaceholder->setStyleSheet("background:#ecf0f1;font-size:18px;color:#7f8c8d;");
     m_centerStack->addWidget(permPlaceholder);//page 4:权限管理
+    m_alarmWidget=new AlarmWidget;
+    m_centerStack->addWidget(m_alarmWidget);//page 5:告警中心
     // === 右侧面板：飞行参数 ===
     m_flightParam=new FlightParameterWidget;
     //组装主分割器
@@ -114,7 +118,7 @@ void MainWindow::setupLayout(){
 //=== 导航菜单===
 void MainWindow::setupNavMenu(){
     QList<QString> items={
-        "实时监控","路径规划","禁飞区管理","历史回放","权限管理"
+        "实时监控","路径规划","禁飞区管理","历史回放","权限管理","告警中心"
     };
     for(int i=0;i<items.size();++i){
         m_navList->addItem(items[i]);
@@ -146,6 +150,39 @@ void MainWindow::onTelemetryReceived(const DroneInfo &drone){
     m_droneManager->updateDroneStatus(drone.id,drone);
     m_droneList->refreshList();
     m_dispatcher->publishTelemetry(drone);
+
+    if (drone.batteryPercent < 20) {
+        AlarmInfo a;
+        a.id = drone.id * 1000 + QDateTime::currentSecsSinceEpoch() % 1000;
+        a.droneId = drone.id;
+        a.type = LowBattery;
+        a.level = Critical;
+        a.message = QString("电量仅剩 %1%，请尽快返航").arg(drone.batteryPercent);
+        a.time = QDateTime::currentDateTime();
+        m_alarmWidget->addAlarm(a);
+    }
+    if (drone.batteryPercent < 30 && drone.batteryPercent >= 20) {
+        AlarmInfo a;
+        a.id = drone.id * 1000 + QDateTime::currentSecsSinceEpoch() % 1000;
+        a.droneId = drone.id;
+        a.type = LowBattery;
+        a.level = Warning;
+        a.message = QString("电量 %1%，建议返航").arg(drone.batteryPercent);
+        a.time = QDateTime::currentDateTime();
+        m_alarmWidget->addAlarm(a);
+    }
+    if (drone.signalStr < 30) {
+        AlarmInfo a;
+        a.id = drone.id * 1000 + QDateTime::currentSecsSinceEpoch() % 1000;
+        a.droneId = drone.id;
+        a.type = SignalLost;
+        a.level = (drone.signalStr < 15) ? Emergency : Warning;
+        a.message = QString("信号强度 %1%，%2").arg(drone.signalStr)
+            .arg(drone.signalStr < 15 ? "即将失联！" : "信号较弱");
+        a.time = QDateTime::currentDateTime();
+        m_alarmWidget->addAlarm(a);
+    }
+
     if (drone.id == m_droneList->currentSelectedId()) {
         m_flightParam->updateData(drone);
     }

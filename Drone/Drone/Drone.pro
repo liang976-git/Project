@@ -33,6 +33,11 @@ SOURCES += \
     src/database/GeoFenceDAO.cpp \
     src/protocol/MavlinkParser.cpp \
     src/protocol/SimulatedLink.cpp \
+    src/ui/AlarmWidget.cpp \
+    src/ui/AltitudeGaugeWidget.cpp \
+    src/ui/CompassWidget.cpp \
+    src/ui/DroneListWidget.cpp \
+    src/ui/FlightParameterWidget.cpp \
     src/ui/GeoFenceWidget.cpp \
     src/ui/HistoryReplayWidget.cpp \
     src/ui/MapWidget.cpp \
@@ -66,6 +71,12 @@ HEADERS += \
     src/protocol/MavlinkMessage.h \
     src/protocol/MavlinkParser.h \
     src/protocol/SimulatedLink.h \
+    src/ui/AlarmWidget.h \
+    src/ui/AlarmWidget.h \
+    src/ui/AltitudeGaugeWidget.h \
+    src/ui/CompassWidget.h \
+    src/ui/DroneListWidget.h \
+    src/ui/FlightParameterWidget.h \
     src/ui/GeoFenceWidget.h \
     src/ui/HistoryReplayWidget.h \
     src/ui/MapWidget.h \
