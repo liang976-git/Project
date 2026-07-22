@@ -78,10 +78,8 @@ void MainWindow::setupLayout(){
     m_mainSplitter=new QSplitter(Qt::Horizontal,this);
     //===中心区域：
     m_centerStack=new QStackedWidget;
-    auto *mapPlaceholder=new QLabel("地图区域（后续集成)");
-    mapPlaceholder->setAlignment(Qt::AlignCenter);
-    mapPlaceholder->setStyleSheet("background:#ecf0f1;font-size:18px;color:#7f8c8d");
-    m_centerStack->addWidget(mapPlaceholder);//page 0:监控
+    m_mapWidget=new MapWidget;
+    m_centerStack->addWidget(m_mapWidget);//page 0:监控
     auto *pathPlaceholder=new QLabel("路径规划（后续开发)");
     pathPlaceholder->setAlignment(Qt::AlignCenter);
     pathPlaceholder->setStyleSheet("background:#ecf0f1;font-size:18px;color:#7f8c8d;");
@@ -186,6 +184,8 @@ void MainWindow::onTelemetryReceived(const DroneInfo &drone){
     if (drone.id == m_droneList->currentSelectedId()) {
         m_flightParam->updateData(drone);
     }
+    m_mapWidget->updateDronePosition(drone);
+    m_mapWidget->addTrailPoint(drone.id, drone.longitude, drone.latitude);
     static int count=0;
     if(++count%50==0){
         qDebug()<<QString("[%1] %2 | 位置:(%3,%4,%5)m | 速度:%6m/s | 电量:%7%")

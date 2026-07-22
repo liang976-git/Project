@@ -1,4 +1,4 @@
-QT       += core gui sql
+QT       += core gui sql webenginewidgets webchannel webengine webchannel
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -86,6 +86,8 @@ HEADERS += \
     src/utils/ExcelExporter.h \
     src/utils/KMLParser.h \
     src/utils/Logger.h
+
+RESOURCES += resources/resources.qrc
 
 FORMS += \
     mainwindow.ui

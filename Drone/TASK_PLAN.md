@@ -1,6 +1,6 @@
 # 无人机管控平台 — 20天开发任务清单
 
-> **当前进度**：Day 9 / 20 | **已完成**：44/90 任务 | **阶段三进行中，准备进入 Day 10**
+> **当前进度**：Day 10 / 20 | **已完成**：44/90 任务 | **阶段三进行中，待高德 Key 验证地图**
 
 > **项目目标**：20天内完成管控平台功能完整可演示版本  
 > **技术栈**：C++ / Qt 5.12 / ZeroMQ / SQLite / 高德地图 / MAVLink(模拟数据)  
@@ -222,12 +222,12 @@ Drone/
 
 | 序号 | 任务 | 具体步骤 | 预计耗时 | 验收标准 |
 |------|------|----------|----------|----------|
-| 10.1 | MapWidget 基础容器 | QWebEngineView 加载本地 HTML，初始化高德地图 JS API | 1h | 地图正常显示在窗口中 |
-| 10.2 | 申请高德地图 Key | 去高德开放平台注册应用，获取 JS API Key | 30min | 拿到有效 Key |
-| 10.3 | 无人机图标标记 | JS 接口在地图上添加/更新无人机 Marker(自定义图标) | 1h | 5 个图标在地图上移动 |
-| 10.4 | 轨迹线绘制 | Polyline 实时绘制无人机飞行轨迹 | 1h | 轨迹随位置更新延伸 |
-| 10.5 | C++ ↔ JS 通信 | QWebChannel 实现 C++ 与 JS 双向调用 | 1.5h | C++ 能调 JS 函数，JS 能回调 C++ |
-| 10.6 | 位置数据推送 | DroneManager 数据变更 → C++ → QWebChannel → JS 更新地图标记 | 1h | 地图标记实时跟随模拟数据移动 |
+| 10.1 | ✅ MapWidget 基础容器 | QWebEngineView + QWebChannel + JsBridge 通信桥 | 1h | 地图容器显示，QWebChannel 就绪 |
+| 10.2 | ⏳ 申请高德地图 Key | 去高德开放平台注册应用，获取 JS API Key | 30min | 拿到有效 Key 替换到 map.html |
+| 10.3 | ✅ 无人机图标标记 | updateMarker JS 接口实现 | 1h | 代码就绪，待 Key 验证 |
+| 10.4 | ✅ 轨迹线绘制 | addTrailPoint JS 接口实现 | 1h | 代码就绪，待 Key 验证 |
+| 10.5 | ✅ C++ ↔ JS 通信 | JsBridge onMapReady 回调 + runJavaScript 推送 | 1.5h | C++→JS(位置推送) + JS→C++(就绪通知) |
+| 10.6 | ✅ 位置数据推送 | onTelemetryReceived → updateDronePosition + addTrailPoint | 1h | 每帧遥测数据推送到地图 |
 
 ---
 

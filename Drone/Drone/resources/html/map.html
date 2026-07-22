@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="initial-scale=1.0, user-scalable=no">
+<style>
+  body, html { margin:0; padding:0; height:100%; width:100%; }
+  #container { width:100%; height:100%; }
+</style>
+</head>
+<body>
+<div id="container"></div>
+<script src="https://webapi.amap.com/maps?v=2.0&key=d431cccf8489a6e65d777332dde1eddb"></script>
+<script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+<script>
+var map, markers = {}, trails = {}, bridge;
+
+new QWebChannel(qt.webChannelTransport, function(channel) {
+    bridge = channel.objects.bridge;
+    if (bridge && typeof bridge.onMapReady === 'function') {
+        bridge.onMapReady();
+    }
+});
+
+AMap.plugin(['AMap.ToolBar'], function() {
+    map = new AMap.Map('container', {
+        zoom: 15,
+        center: [120.0, 30.0],
+        mapStyle: 'amap://styles/light'
+    });
+    map.addControl(new AMap.ToolBar());
+});
+
+function updateMarker(id, lng, lat, heading, name) {
+    if (!markers[id]) {
+        markers[id] = new AMap.Marker({
+            position: [lng, lat],
+            label: { content: name, offset: new AMap.Pixel(0, -18) }
+        });
+        markers[id].setMap(map);
+    }
+    markers[id].setPosition([lng, lat]);
+    markers[id].setAngle(heading);
+    map.setCenter([lng, lat]);
+}
+
+function updateAllMarkers(drones) {
+    for (var i = 0; i < drones.length; i++) {
+        var d = drones[i];
+        updateMarker(d.id, d.lng, d.lat, d.heading, d.name);
+    }
+}
+
+function addTrailPoint(droneId, lng, lat) {
+    if (!trails[droneId]) {
+        trails[droneId] = new AMap.Polyline({
+            path: [[lng, lat]],
+            strokeColor: '#e74c3c',
+            strokeWeight: 3,
+            map: map
+        });
+    }
+    var path = trails[droneId].getPath();
+    path.push([lng, lat]);
+    trails[droneId].setPath(path);
+}
+</script>
+</body>
+</html>

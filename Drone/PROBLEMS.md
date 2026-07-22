@@ -1564,3 +1564,156 @@ if (drone.signalStr < 30) {
 **项目进度**：44/90 任务完成 (48.9%)
 
 ---
+
+## Day 10 — 地图容器 + 高德地图 JS API
+
+### 知识点 1：QWebEngineView 嵌入 Web 页面
+
+**⚠️ 面试题：QWebEngineView vs QWebView（Qt WebKit）的区别**
+
+| 对比 | QWebEngineView（Qt5.6+） | QWebView（Qt WebKit，已废弃） |
+|------|--------------------------|-------------------------------|
+| 内核 | Chromium | WebKit |
+| Qt 支持 | 5.6+ | 5.0-5.5 |
+| 性能 | 高（多进程架构） | 低（进程内渲染） |
+| QWebChannel | ✅ 原生支持 | ❌ 兼容性差 |
+| 内存占用 | 高（每个 view 一个子进程） | 低 |
+| 主推 | ✅ Qt6 继续支持 | ❌ Qt6 已完全移除 |
+
+**安装方式**（Ubuntu 20.04）：
+```bash
+sudo apt install qtwebengine5-dev libqt5webenginewidgets5
+```
+
+`.pro` 配置：
+```qmake
+QT += webenginewidgets webchannel
+```
+
+---
+
+### 知识点 2：QWebChannel 双向通信
+
+**架构示意**：
+```
+C++                          JS
+───                          ──
+QWebChannel::registerObject("bridge", bridge)
+    │                            │
+    │   QWebChannel 自动注入     │
+    └────────────────────────→  qwebchannel.js
+                                 │
+                                 │ channel.objects.bridge 可用
+                                 │
+bridge.onMapReady() ──────→     bridge.onMapReady(lng,lat)
+    │                            │
+    └── emit mapReady() ───→    bridge.mapReady.connect(callback)
+```
+
+**⚠️ 面试题：QWebChannel 相比 eval 的优缺点**
+
+| 方案 | 优点 | 缺点 |
+|------|------|------|
+| `page()->runJavaScript(js)` | 简单，不需要 QWebChannel | 单向，C++→JS，不能 JS→C++ |
+| `QWebChannel` | **双向**，JS 可以调用 C++ 槽函数 | 需要额外的 qwebchannel.js |
+| `QWebEnginePage::javaScriptConsoleMessage` | 调试 JS 错误 | 只读，不能交互 |
+
+本项目：**双管齐下**：
+- C++→JS：`runJavaScript` 推送位置数据
+- JS→C++：`QWebChannel` → `JsBridge::onMapReady` 通知 C++ 地图就绪
+
+**`QWebChannel` 的必要条件**：
+1. C++ 端：`Q_OBJECT` 宏必须有
+2. JS 端：`<script src="qrc:///qtwebchannel/qwebchannel.js"></script>` 必须引入
+3. JS 端：必须先 `new QWebChannel(qt.webChannelTransport, callback)` 拿到 bridge 对象
+
+---
+
+### 知识点 3：Qt 资源系统（Resource System）
+
+```qmake
+RESOURCES += resources/resources.qrc
+```
+
+```xml
+<!-- resources.qrc -->
+<RCC>
+    <qresource prefix="/">
+        <file>html/map.html</file>
+    </qresource>
+</RCC>
+```
+
+**访问方式**：`QFile file(":/html/map.html")` 或者 JS 中用 `qrc:///qtwebchannel/qwebchannel.js`
+
+**rcc 编译器**：
+- `.qrc` 文件在编译时被 `rcc` 工具编译为 C++ 源码（`qrc_resources.cpp`）
+- 数据嵌入到二进制文件中，无需外部文件依赖
+- 缺点是修改 HTML 后需要重新编译整个程序
+
+**⚠️ 面试题：Qt 资源文件 vs 外部文件的取舍**
+
+| 方案 | 优点 | 缺点 |
+|------|------|------|
+| Qt 资源（本项目） | 部署简单，单二进制 | 修改 HTML 要重编译 |
+| 外部文件 + `setUrl()` | 修改 HTML 不重编译 | 路径依赖，部署必须带 HTML |
+| `setHtml(html, baseUrl)` | 灵活，可从数据库/网络加载 | 跨域限制（CORS） |
+
+---
+
+### 知识点 4：`runJavaScript` 的异步与调试
+
+```cpp
+// 无回调
+m_view->page()->runJavaScript(js);
+
+// 有回调（获取 JS 返回值）
+m_view->page()->runJavaScript("1+1", [](const QVariant &v) {
+    qDebug() << "JS result:" << v.toInt();  // 2
+});
+```
+
+**调试 JS 错误**：
+```cpp
+// mainwindow.cpp 构造函数加：
+m_mapWidget->page()->javaScriptConsoleMessage(
+    [](QWebEnginePage::JavaScriptConsoleMessageLevel level,
+       const QString &msg, int line, const QString &source) {
+        qDebug() << "js:" << msg;
+    });
+```
+
+本项目 JS 告警 `AMap is not defined` 的原因是：
+1. `YOUR_KEY_HERE` 未替换为有效 Key → 高德 JS SDK 不加载
+2. 即使有 Key，外网脚本需要网络访问
+3. 加载异步，JS 在 AMap ready 前试图调用 `AMap.Map()`
+
+---
+
+### 知识点 5：Qt 中嵌入地图的选型对比
+
+| 方案 | 难度 | 免费 | 离线可用 | 本项目 |
+|------|------|------|----------|--------|
+| **高德 JS API + QWebEngineView** | 中 | ✅ 每天 100 万次 | ❌ 需网络 | ✅ 采用 |
+| 百度地图 JS API + QWebEngineView | 中 | ✅ 有限免费 | ❌ 需网络 | ❌ |
+| Leaflet + OpenStreetMap | 中 | ✅ 完全免费 | ✅ 可预缓存瓦片 | ❌ |
+| QGroundControl 方案（Qt Location） | 高 | ✅ | ✅ | ❌ |
+| QCustomPlot / 自绘地图 | 高 | ✅ | ✅ | ❌ 不现实 |
+
+---
+
+### 当天总结
+
+**Day 10 进度**（部分完成 - 待高德 Key）：
+- ✅ 安装 qtwebengine5-dev
+- ✅ MapWidget 容器（QWebEngineView + QWebChannel + JsBridge）
+- ✅ map.html：AMap 地图初始化 + updateMarker / addTrailPoint JS 接口
+- ✅ Qt 资源文件（resources.qrc + html/map.html）
+- ✅ 集成 MainWindow：替换占位地图 + onTelemetryReceived 推送到地图
+- ✅ 编译：0 error, 0 crash
+- ⏳ 高德 Key：需要你替换 `YOUR_KEY_HERE` 为有效 Key
+- ⏳ 地图验证：有 Key 后运行确认地图加载和无人机标记
+
+**项目进度**：44/90 任务完成 (48.9%) — 待 Key 后可更新地图相关任务
+
+---
