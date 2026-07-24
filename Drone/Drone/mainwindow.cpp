@@ -4,6 +4,9 @@
 #include <QLabel>
 #include <QVBoxLayout>
 #include <QDateTime>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
 #include "src/database/DatabaseManager.h"
 #include "src/model/AlarmInfo.h"
 
@@ -80,14 +83,10 @@ void MainWindow::setupLayout(){
     m_centerStack=new QStackedWidget;
     m_mapWidget=new MapWidget;
     m_centerStack->addWidget(m_mapWidget);//page 0:监控
-    auto *pathPlaceholder=new QLabel("路径规划（后续开发)");
-    pathPlaceholder->setAlignment(Qt::AlignCenter);
-    pathPlaceholder->setStyleSheet("background:#ecf0f1;font-size:18px;color:#7f8c8d;");
-    m_centerStack->addWidget(pathPlaceholder);//page 1:路径规划
-    auto *fencePlaceholder=new QLabel("禁飞区管理（后续开发)");
-    fencePlaceholder->setAlignment(Qt::AlignCenter);
-    fencePlaceholder->setStyleSheet("background:#ecf0f1;font-size:18px;color:#7f8c8d;");
-    m_centerStack->addWidget(fencePlaceholder);//page 2:禁飞去
+    auto *pathWidget=new PathPlanningWidget;
+    m_centerStack->addWidget(pathWidget);//page 1:路径规划
+    m_fenceWidget=new GeoFenceWidget;
+    m_centerStack->addWidget(m_fenceWidget);//page 2:禁飞区管理
     auto *historyPlaceholder=new QLabel("历史回放（后续开发）");
     historyPlaceholder->setAlignment(Qt::AlignCenter);
     historyPlaceholder->setStyleSheet("background:#ecf0f1;font-size:18px;color:#7f8c8d");
@@ -128,6 +127,48 @@ void MainWindow::setupNavMenu(){
 void MainWindow::setupConnections(){
     connect(m_navList,&QListWidget::currentRowChanged,this,&MainWindow::onNavChanged);
     connect(m_droneList,&DroneListWidget::droneSelected,this,&MainWindow::onDroneSelected);
+    connect(m_mapWidget, &MapWidget::mapClicked, this, [this](double lng, double lat) {
+        auto *pw = m_centerStack->currentWidget()->findChild<PathPlanningWidget*>();
+        if (!pw) return;
+        WayPoint wp;
+        wp.longitude = lng;
+        wp.latitude = lat;
+        wp.altitude = 100;
+        wp.speed = 10;
+        auto pts = pw->waypoints();
+        pts.append(wp);
+        pw->setWaypoints(pts);
+    });
+    connect(m_fenceWidget, &GeoFenceWidget::requestDrawFence,
+            this, [this](const QString &type){
+        m_centerStack->setCurrentIndex(0);
+        m_mapWidget->enterDrawMode(type);
+    });
+    connect(m_mapWidget, &MapWidget::fenceDrawn,
+            m_fenceWidget, &GeoFenceWidget::onFenceDrawn);
+    connect(m_fenceWidget, &GeoFenceWidget::fenceAdded,
+            this, [this](const GeoFenceZone &zone){
+        QJsonObject params;
+        if (zone.type == Circle) {
+            params["lng"] = zone.centerLng;
+            params["lat"] = zone.centerLat;
+            params["radius"] = zone.radius;
+        } else if (zone.type == Rectangle && zone.points.size() >= 2) {
+            double swLat = zone.points[0].first, swLng = zone.points[0].second;
+            double neLat = zone.points[1].first, neLng = zone.points[1].second;
+            QJsonObject bounds;
+            params["swLng"] = swLng; params["swLat"] = swLat;
+            params["neLng"] = neLng; params["neLat"] = neLat;
+        } else if (zone.type == Polygon && !zone.points.isEmpty()) {
+            QJsonArray arr;
+            for(const auto &p : zone.points){
+                QJsonObject pt; pt["lng"]=p.second; pt["lat"]=p.first; arr.append(pt);
+            }
+            params["paths"] = arr;
+        } else return;
+        QString typeStr = zone.type==Circle?"circle":zone.type==Rectangle?"rectangle":"polygon";
+        m_mapWidget->renderFenceZone(typeStr, QString(QJsonDocument(params).toJson(QJsonDocument::Compact)));
+    });
 }
 //===导航切换===
 void MainWindow::onNavChanged(int row){

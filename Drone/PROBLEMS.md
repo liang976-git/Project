@@ -1847,3 +1847,264 @@ function toggleLayer(name, visible) {
 **项目进度**：46/90 任务完成 (51.1%)
 
 ---
+
+## Day 12 — 路径规划 UI + 禁飞区地图绘制
+
+### 知识点 1：地图航点交互（Day 12.3）— 拖拽/右键/双击
+
+**功能概览**：在地图上通过点击添加航点 Marker，可拖拽移动、右键删除、双击编辑高度/速度，航点之间自动连 Polyline。
+
+**JS 侧（map.html）实现**：
+
+```javascript
+// 创建航点 Marker（支持拖拽）
+var marker = new AMap.Marker({
+    position: [p.lng, p.lat],
+    draggable: true,
+    label: { content: caption, offset: new AMap.Pixel(0, -18) }
+});
+
+// 拖拽结束 → 通知 C++
+marker.on('dragend', function(e) {
+    var pos = e.target.getPosition();
+    bridge.onWaypointMoved(index, pos.getLng(), pos.getLat());
+});
+
+// 右键删除
+marker.on('rightclick', function() {
+    bridge.onWaypointDelete(index);
+});
+
+// 双击编辑高度/速度
+marker.on('dblclick', function() {
+    var alt = prompt("高度(m):", p.altitude);
+    var spd = prompt("速度(m/s):", p.speed);
+    bridge.onWaypointEdited(index, parseFloat(alt), parseFloat(spd));
+});
+```
+
+**⚠️ 面试题：AMap.Marker 的 `draggable` 属性如何工作？**
+- `draggable: true` 启用拖拽，高德内部捕获鼠标拖拽事件
+- 拖拽结束触发 `dragend` 事件，`e.target.getPosition()` 获取新坐标
+- 拖拽时自动更新 Marker 位置，无需手动刷新
+
+**C++ 侧（MapWidget → JsBridge）数据流**：
+
+```
+JS dragend → bridge.onWaypointMoved(index, lng, lat)
+    ↓
+JsBridge::onWaypointMoved → emit waypointMoved(index, lng, lat)
+    ↓
+MapWidget::waypointMoved signal → MainWindow connect
+    ↓
+PathPlanningWidget::updateWaypoint(index, lng, lat)
+```
+
+**参数传递设计**：
+
+| 方向 | 数据格式 | 序列化方式 |
+|------|----------|-----------|
+| C++→JS（renderWaypoints） | `QList<WayPoint>` → `QJsonArray` | `QJsonDocument::toJson(Compact)` |
+| JS→C++（拖拽/编辑） | 基础类型（int, double） | QWebChannel 原生支持 |
+| JS→C++（点击添加） | double lng, double lat | QWebChannel 原生支持 |
+
+**⚠️ 面试题：为什么航点数据用 `QJsonArray` 传输而不是逐条传递？**
+
+| 方案 | 代码量 | 性能 | 原子性 |
+|------|--------|------|--------|
+| 逐条 `runJavaScript` 添加 | 多（循环 N 次） | 慢（N 次 JS 调用） | 不完全（可能中间失败） |
+| 整体 JSON 传递 + JS 循环 | 少（1 次调用） | 快（1 次序列化） | ✅ 全量替换 |
+
+---
+
+### 知识点 2：Q_DECLARE_METATYPE 与信号参数
+
+**问题**：`WayPoint` 结构体作为信号参数传递时报错 `QObject::connect: Cannot queue arguments of type 'WayPoint'`
+
+**原因**：跨线程信号槽（QueuedConnection）需要参数可拷贝到 `QVariant`，自定义类型需要注册。
+
+**解决**：
+```cpp
+// FlightPath.h 末尾
+Q_DECLARE_METATYPE(WayPoint)
+```
+
+**⚠️ 面试题：Q_DECLARE_METATYPE 的作用？**
+
+| 场景 | 需要注册？ | 原因 |
+|------|-----------|------|
+| DirectConnection（同线程） | ❌ 不需要 | 直接函数指针调用，不经过事件队列 |
+| QueuedConnection（跨线程） | ✅ 必须 | 参数需拷贝到事件队列中 |
+| QVariant 直接使用 | ✅ 必须 | 否则编译报错 `static_assert failed` |
+| 信号参数为 `QList<WayPoint>` | ⚠️ WayPoint 需注册 | `QList<T>` 本身是注册的，但 `T` 需要注册 |
+
+**面试追问**：
+- **`Q_DECLARE_METATYPE` 和 `qRegisterMetaType` 有什么区别？** → `Q_DECLARE_METATYPE` 在头文件中声明类型信息（编译期）；`qRegisterMetaType` 在运行时注册（运行时，常用于动态类型）
+- **为什么 Qt 内置类型（QString、int）不需要注册？** → Qt 已经在 `QMetaType` 中内置注册了所有基本类型和常用容器
+
+---
+
+### 知识点 3：AMap.MouseTool 绘图交互（Day 12.5）
+
+**核心 API**：
+```javascript
+var mouseTool = new AMap.MouseTool(map);
+mouseTool.circle({ style options });   // 开始画圆
+mouseTool.rectangle({ style options }); // 开始画矩形
+mouseTool.polygon({ style options });   // 开始画多边形
+mouseTool.close(true);                  // 退出绘制，true=清除半成品
+mouseTool.on('draw', function(e) {
+    var shape = e.obj;  // 绘制完成的图形
+});
+```
+
+**⚠️ 面试题：AMap.MouseTool 的 `draw` 事件中三种形状怎么统一处理？**
+
+`e.obj` 是绘制结果，类型不同但可以通过鸭子类型（duck typing）处理：
+
+| 形状 | 获取位置 | 获取尺寸 |
+|------|---------|---------|
+| Circle | `obj.getCenter()` → `{lng, lat}` | `obj.getRadius()` |
+| Rectangle | `obj.getBounds()` → `getSouthWest()` / `getNorthEast()` | 无 |
+| Polygon | `obj.getPath()` → `[{lng,lat}, ...]` | 无 |
+
+**C++ 端解析**：
+```cpp
+void GeoFenceWidget::onFenceDrawn(const QString &type, const QString &paramsJson) {
+    QJsonDocument doc = QJsonDocument::fromJson(paramsJson.toUtf8());
+    QJsonObject obj = doc.object();
+    if (type == "circle") {
+        m_latSpin->setValue(obj["centerLat"].toDouble());
+        m_lngSpin->setValue(obj["centerLng"].toDouble());
+        m_radiusSpin->setValue(obj["radius"].toDouble());
+    } else if (type == "rectangle") {
+        double centerLat = (obj["swLat"].toDouble() + obj["neLat"].toDouble()) / 2.0;
+        double centerLng = (obj["swLng"].toDouble() + obj["neLng"].toDouble()) / 2.0;
+    } else if (type == "polygon") {
+        // 只设置类型，顶点从 params.paths 数组读取
+    }
+}
+```
+
+**⚠️ 面试题：为什么不用 QWebChannel 直接传 JS 对象？**
+QWebChannel 只能传递基础类型（`int`、`double`、`QString`），复杂对象必须 `JSON.stringify` 序列化成字符串，C++ 端用 `QJsonDocument` 解析。
+
+---
+
+### 知识点 4：JS 闭包陷阱在航点交互中的应用
+
+**⚠️ 面试题：循环中注册事件回调时，变量捕获有什么坑？**
+
+```javascript
+// ❌ 错误：所有 marker 的 click 回调打印的都是最后一个 index
+for (var i = 0; i < waypoints.length; i++) {
+    var marker = new AMap.Marker({ ... });
+    marker.on('click', function() {
+        console.log(i);  // 永远输出 waypoints.length
+    });
+}
+
+// ✅ 正确：用函数工厂创建闭包
+function createMarker(p, index) {
+    var marker = new AMap.Marker({ ... });
+    marker.on('dragend', function(e) {
+        bridge.onWaypointMoved(index, ...);
+    });
+    marker.on('rightclick', function() {
+        bridge.onWaypointDelete(index);
+    });
+    return marker;
+}
+```
+
+本项目通过 `renderWaypoints` JS 函数接收整个 JSON 数组，在 `Array.forEach` 中创建标记，每个迭代都形成独立的闭包：
+
+```javascript
+function renderWaypoints(points) {
+    clearWaypoints();
+    points.forEach(function(p, i) {
+        var marker = new AMap.Marker({
+            position: [p.lng, p.lat],
+            draggable: true
+        });
+        marker.on('dragend', function(e) {
+            bridge.onWaypointMoved(i, ...);
+        });
+        waypoints[i] = { marker: marker, data: p };
+    });
+}
+```
+
+**面试追问**：
+- **ES6 的 `let` 能解决吗？** → 可以，`let` 有块级作用域，每次循环创建新的绑定
+- **箭头函数和普通函数在闭包上有什么区别？** → 箭头函数捕获 `this` 和所在作用域的变量，普通函数有自己的 `this`
+
+---
+
+### 知识点 5：QWebChannel 信号转发模式（Bridge 模式）
+
+**架构**：
+```
+JS 事件 → JsBridge slot → emit signal → MapWidget signal → MainWindow → 目标 Widget
+```
+
+**为什么需要三层转发？**
+| 层 | 职责 | 为什么不能跳过 |
+|----|------|---------------|
+| **JsBridge** | QWebChannel 注册对象，接收 JS 调用 | 必须，QWebChannel 只能注册 QObject |
+| **MapWidget** | 转发 JsBridge 信号 + 暴露公共方法 | 隔离 WebChannel 细节，外部不用关心 JsBridge 存在 |
+| **MainWindow** | 协调多个 Widget 之间的通信 | 业务逻辑放在 MainWindow，不污染 MapWidget |
+
+**⚠️ 面试题：为什么不直接把 MainWindow 注册为 bridge 对象？**
+```cpp
+// ❌ 直接将 MainWindow 注册为 bridge
+m_channel->registerObject("bridge", this);
+// 问题：MainWindow 已经很大了，再混合 WebChannel 逻辑更混乱
+```
+**设计原则**：单一职责（Single Responsibility）— JsBridge 只做一件事：JS ↔ C++ 桥接。
+
+---
+
+### 知识点 6：`QOverload<int>::of` 消除信号歧义
+
+**问题和解决**：
+```cpp
+// QComboBox::currentIndexChanged 有两个重载：
+//   void currentIndexChanged(int index)
+//   void currentIndexChanged(const QString &text)  // 已弃用但存在
+
+// 新语法必须用 QOverload 消除歧义：
+connect(m_drawTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+        this, [this](int idx) { ... });
+```
+
+**面试追问**：
+- **旧语法需要 QOverload 吗？** → 不需要，旧语法用字符串 `SIGNAL(currentIndexChanged(int))` 包含参数类型
+- **为什么 Qt 不删掉废弃的重载？** → 为了向后兼容
+
+---
+
+### 当天总结
+
+**Day 12 验收**：
+- ✅ 12.1 PathPlanningWidget 面板：表格 + 编辑表单 + CRUD 按钮 + 导入导出/保存
+- ✅ 12.2 地图点击添加航点：map.html click → bridge.onMapClick → PathPlanningWidget 追加
+- ✅ 12.3 航点编辑：拖拽移动（dragend）、右键删除（rightclick）、双击编辑（dblclick）+ Polyline 连线
+- ✅ 12.5 禁飞区地图绘制：AMap.MouseTool 三种形状 + GeoFenceWidget 绘制按钮 + 回填表单
+- ✅ 编译：0 error
+- ⏳ 12.4 航线保存/加载（待开发）
+- ⏳ 12.6 KML 导入导出（待开发）
+
+**项目进度**：50/90 任务完成 (55.6%)
+
+**Day 12 新增/修改文件清单**：
+| 文件 | 修改内容 |
+|------|---------|
+| `resources/html/map.html` | renderWaypoints/clearWaypoints + enterDrawMode/exitDrawMode |
+| `src/ui/MapWidget.h` | JsBridge slots/signals: fence/waypoint 全套 + MapWidget public 方法 |
+| `src/ui/MapWidget.cpp` | JsBridge 实现 + enterDrawMode/renderFenceZone + 信号转发 |
+| `src/ui/PathPlanningWidget.h/.cpp` | 表格 + 编辑表单 + CRUD + 导入导出/保存 |
+| `src/ui/GeoFenceWidget.h/.cpp` | 地图绘制按钮 + 类型选择 + onFenceDrawn 解析 |
+| `mainwindow.h/.cpp` | m_fenceWidget 成员 + 信号槽联动 |
+
+---

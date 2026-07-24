@@ -30,6 +30,36 @@ var map, markers = {}, trails = {}, bridge;
 var fenceLayers = {};
 var layerVisibles = { markers: true, trails: true, fences: true };
 var infoWindow = new AMap.InfoWindow({ offset: new AMap.Pixel(0, -30) });
+var mouseTool;
+function enterDrawMode(type){
+    if(!mouseTool) mouseTool=new AMap.MouseTool(map);
+    exitDrawMode();
+    if(type==='circle') mouseTool.circle({fillColor:'#e74c3c',fillOpacity:0.2,strokeColor:'#c0392b',strokeWeight:2});
+    else if(type==='rectangle') mouseTool.rectangle({fillColor:'#e74c3c',fillOpacity:0.2,strokeColor:'#c0392b',strokeWeight:2});
+    else if(type==='polygon') mouseTool.polygon({fillColor:'#e74c3c',fillOpacity:0.2,strokeColor:'#c0392b',strokeWeight:2});
+    mouseTool.on('draw',function(e){
+        var obj=e.obj, params={}, paths;
+        if(type==='circle'){
+            params.centerLng=obj.getCenter().getLng();
+            params.centerLat=obj.getCenter().getLat();
+            params.radius=obj.getRadius();
+        }else if(type==='rectangle'){
+            var b=obj.getBounds();
+            params.swLng=b.getSouthWest().getLng();
+            params.swLat=b.getSouthWest().getLat();
+            params.neLng=b.getNorthEast().getLng();
+            params.neLat=b.getNorthEast().getLat();
+        }else if(type==='polygon'){
+            paths=obj.getPath(); params.paths=[];
+            for(var i=0;i<paths.length;i++)
+                params.paths.push({lng:paths[i].getLng(),lat:paths[i].getLat()});
+        }
+        if(bridge&&typeof bridge.onFenceDrawn==='function')
+            bridge.onFenceDrawn(type,JSON.stringify(params));
+        exitDrawMode();
+    });
+}
+function exitDrawMode(){ if(mouseTool) mouseTool.close(true); }
 
 new QWebChannel(qt.webChannelTransport, function(channel) {
     bridge = channel.objects.bridge;
@@ -45,6 +75,11 @@ AMap.plugin(['AMap.ToolBar'], function() {
         mapStyle: 'amap://styles/light'
     });
     map.addControl(new AMap.ToolBar());
+    map.on('click', function(e) {
+        if (bridge && typeof bridge.onMapClick === 'function') {
+            bridge.onMapClick(e.lnglat.getLng(), e.lnglat.getLat());
+        }
+    });
 });
 
 function updateMarker(id, lng, lat, heading, name) {

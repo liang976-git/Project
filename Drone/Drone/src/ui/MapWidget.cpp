@@ -16,7 +16,18 @@ void JsBridge::onMapReady() {
     qDebug() << "[地图] JS 引擎就绪";
     emit mapReady();
 }
-
+void JsBridge::onWaypointDelete(int index){
+    emit waypointDelete(index);
+}
+void JsBridge::onWaypointMoved(int index, double lng, double lat){
+    emit onWaypointMoved(index,lng,lat);
+}
+void JsBridge::onWaypointEdited(int index, double altitude, double speed){
+    emit onWaypointEdited(index,altitude,speed);
+}
+void JsBridge::onFenceDrawn(const QString &type, const QString &paramsJson){
+    emit fenceDrawn(type, paramsJson);
+}
 MapWidget::MapWidget(QWidget *parent) : QWidget(parent) {
     setupUI();
 }
@@ -31,7 +42,11 @@ void MapWidget::setupUI() {
 
     m_channel->registerObject("bridge", m_bridge);
     m_view->page()->setWebChannel(m_channel);
-
+    connect(m_bridge, &JsBridge::mapClicked, this, &MapWidget::mapClicked);
+    connect(m_bridge,&JsBridge::waypointDelete,this,&MapWidget::waypointDeleted);
+    connect(m_bridge,&JsBridge::waypointMoved,this,&MapWidget::waypointMoved);
+    connect(m_bridge,&JsBridge::waypointEdited,this,&MapWidget::waypointEdited);
+    connect(m_bridge,&JsBridge::fenceDrawn,this,&MapWidget::fenceDrawn);
     layout->addWidget(m_view);
     initMap();
 }
@@ -87,5 +102,31 @@ void MapWidget::addTrailPoint(int droneId, double lng, double lat) {
     ).arg(droneId)
      .arg(lng, 0, 'f', 6)
      .arg(lat, 0, 'f', 6);
+    m_view->page()->runJavaScript(js);
+}
+void MapWidget::enterDrawMode(const QString &type){
+    QString js=QString("if(typeof enterDrawMode==='function'){enterDrawMode('%1');}").arg(type);
+    m_view->page()->runJavaScript(js);
+}
+void MapWidget::exitDrawMode(){
+    m_view->page()->runJavaScript("if(typeof exitDrawMode==='function')exitDrawMode();");
+}
+void MapWidget::renderFenceZone(const QString &type, const QString &paramsJson){
+    QString js=QString("if(typeof addFenceZone==='function'){addFenceZone(Date.now(),'%1',%2);}")
+                    .arg(type, paramsJson);
+    m_view->page()->runJavaScript(js);
+}
+void MapWidget::renderWaypoints(const QList<WayPoint> &pts){
+    QJsonArray arr;
+    for(const auto &p:pts){
+        QJsonObject obj;
+        obj["lng"]=p.longitude;
+        obj["lat"]=p.latitude;
+        obj["altitude"]=p.altitude;
+        obj["speed"]=p.speed;
+        arr.append(obj);
+    }
+    QString js=QString("if(typeof renderWaypoints === 'function'){"
+                       "renderWaypoints(%1);}").arg(QString(QJsonDocument(arr).toJson(QJsonDocument::Compact)));
     m_view->page()->runJavaScript(js);
 }

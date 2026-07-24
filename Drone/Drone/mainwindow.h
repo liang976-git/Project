@@ -13,7 +13,9 @@
 #include "src/ui/StatusBarWidget.h"
 #include "src/ui/DroneListWidget.h"
 #include "src/ui/AlarmWidget.h"
+#include "src/ui/GeoFenceWidget.h"
 #include "src/ui/MapWidget.h"
+#include "src/ui/PathPlanningWidget.h"
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
 QT_END_NAMESPACE
@@ -51,5 +53,6 @@ private:
     StatusBarWidget *m_statusBar;//底部状态栏
     AlarmWidget *m_alarmWidget;
     MapWidget *m_mapWidget;
+    GeoFenceWidget *m_fenceWidget;
 };
 #endif // MAINWINDOW_H
